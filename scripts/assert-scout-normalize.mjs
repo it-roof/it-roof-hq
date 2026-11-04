@@ -2,12 +2,19 @@
 /** Node-Assertions für Scout-Normalisierung und Notion-Mapping. */
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {
+  applyCompanyAlias,
+  companyAliasFamily,
   companyNameKey,
+  isGenericCompanyName,
   normalizeCompanyName,
   normalizeDomain,
   normalizeLinkedInUrl,
+  parseCompanyName,
+  personalFirmName,
 } from '../lib/leads/normalize.ts';
 import {
+  LINKEDIN_CAMPAIGN_NAME,
+  LINKEDIN_CAMPAIGN_SLUG,
   mapRegionToQuery,
   mapZielgruppeToIndustry,
   notionStatusToLinkedIn,
@@ -36,8 +43,41 @@ assert(
 assert(normalizeLinkedInUrl('') === null, 'empty linkedin');
 
 assert(normalizeCompanyName('  F.E.L.S.   PartG  ') === 'F.E.L.S. PartG', 'company collapse spaces');
-assert(companyNameKey('  F.E.L.S.   PartG  ') === 'f.e.l.s. partg', 'company key');
-assert(companyNameKey('f.e.l.s.') !== companyNameKey('f.e.l.s rechtsanwälte partgmbb'), 'no fuzzy merge');
+assert(companyNameKey('  F.E.L.S.   PartG  ') === 'fels', 'key strips dots and partg');
+assert(companyNameKey('Steinbock & Partner') === 'steinbock und partner', 'ampersand to und, keep partner');
+assert(companyNameKey('Rödl & Partner') === 'rödl und partner', 'roedl partner kept');
+assert(companyNameKey('Foo GmbH') === 'foo', 'gmbh stripped');
+assert(companyNameKey('Foo PartG mbB') === 'foo', 'partg mbb stripped');
+assert(companyNameKey('Foo Rechtsanwaltsgesellschaft') === 'foo', 'rag stripped');
+assert(
+  companyNameKey('Braun Venten Rechtsanwälte Fachanwälte PartmbB (Inhaberin)')
+    === 'braun venten rechtsanwälte fachanwälte',
+  'parens then partmbb',
+);
+assert(companyNameKey('und partner') === 'und partner', 'und partner not a legal form');
+assert(isGenericCompanyName('Notar') === true, 'generic notar');
+assert(isGenericCompanyName('Rechtsanwältin') === true, 'generic rAin');
+assert(isGenericCompanyName('eigene kanzlei') === true, 'generic eigene');
+assert(isGenericCompanyName('selbstständig (ex Rödl & Partner)') === true, 'generic selbstständig ex rödl');
+assert(isGenericCompanyName('Unbekannt') === true, 'generic unbekannt');
+assert(isGenericCompanyName('Kanzlei') === true, 'generic kanzlei');
+assert(isGenericCompanyName('Steuer') === true, 'generic steuer');
+assert(isGenericCompanyName('Steuerkanzlei') === true, 'generic steuerkanzlei');
+assert(companyNameKey('selbstständig (ex Rödl)') === null, 'prefix+paren → generic');
+assert(companyAliasFamily('F.E.L.S.') === 'fels', 'fels family short');
+assert(companyAliasFamily('F.E.L.S Rechtsanwälte PartGmbB') === 'fels', 'fels family long');
+assert(companyAliasFamily('F.E.L.S Rechtsanwälte Bayreuth GbR (Steuerberater)') === 'fels', 'fels bayreuth');
+assert(companyAliasFamily('Rödl') === 'roedl', 'roedl short');
+assert(companyAliasFamily('Rödl & Partner') === 'roedl', 'roedl partner');
+assert(companyAliasFamily('selbstständig (ex Rödl)') === null, 'ex rödl not family');
+assert(applyCompanyAlias('f.e.l.s.') === 'F.E.L.S Rechtsanwälte', 'fels alias display');
+assert(applyCompanyAlias('Rödl') === 'Rödl & Partner', 'roedl alias display');
+assert(parseCompanyName('F.E.L.S.').key === 'fels rechtsanwälte', 'fels parsed key from alias display');
+assert(parseCompanyName('Notar').generic === true, 'parse generic');
+assert(personalFirmName('Ada', 'Beispiel', 'Bamberg') === 'Ada Beispiel (Kanzlei, Bamberg)', 'personal city');
+assert(personalFirmName('Ada', 'Beispiel', null) === 'Ada Beispiel (Kanzlei)', 'personal no city');
+assert(LINKEDIN_CAMPAIGN_NAME === 'LinkedIn KI-Schulung Kanzleien', 'campaign name');
+assert(LINKEDIN_CAMPAIGN_SLUG === 'linkedin-ki-schulung', 'campaign slug');
 
 assert(notionStatusToLinkedIn('Anfrage offen') === 'li_anfrage_gesendet', 'status anfrage');
 assert(notionStatusToLinkedIn('Angenommen') === 'li_vernetzt', 'status angenommen');

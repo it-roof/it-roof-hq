@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { getLeadsDb } from '@/lib/leads/db';
 import { campaign } from '@/lib/leads/schema';
 import {
   LINKEDIN_CAMPAIGN_NAME,
+  LINKEDIN_CAMPAIGN_NAME_LEGACY,
   LINKEDIN_CAMPAIGN_SLUG,
 } from '@/lib/leads/linkedin-status';
 
@@ -38,7 +39,7 @@ export async function resolveCampaignId(
     const [row] = await db
       .select({ id: campaign.id, channel: campaign.channel, name: campaign.name })
       .from(campaign)
-      .where(eq(campaign.name, LINKEDIN_CAMPAIGN_NAME))
+      .where(inArray(campaign.name, [LINKEDIN_CAMPAIGN_NAME, LINKEDIN_CAMPAIGN_NAME_LEGACY]))
       .limit(1);
     return row ?? null;
   }

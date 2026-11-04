@@ -16,6 +16,11 @@ export const lead = pgTable('lead', {
   /** Wann outreach_status zuletzt gesetzt/geprüft wurde */
   outreachStatusAt: timestamp('outreach_status_at', { withTimezone: true, mode: 'string' }),
   searchQueryId: uuid('search_query_id'),
+  firmSize: text('firm_size'),
+  specialties: text(),
+  sourceUrl: text('source_url'),
+  fitReason: text('fit_reason'),
+  emailOutreachBlocked: boolean('email_outreach_blocked').notNull().default(false),
 });
 
 export const leadContact = pgTable('lead_contact', {

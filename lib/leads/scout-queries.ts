@@ -3,10 +3,10 @@ import { getLeadsDb } from '@/lib/leads/db';
 import { campaignContact, lead, leadContact, searchQuery, searchQueryTag, tag } from '@/lib/leads/schema';
 import { emptyToNull, nowIso } from '@/lib/leads/http';
 import {
-  companyNameKey,
   normalizeCompanyName,
   normalizeDomain,
   normalizeLinkedInUrl,
+  parseCompanyName,
   parseOptionalDate,
 } from '@/lib/leads/normalize';
 import {
@@ -34,6 +34,11 @@ export function publicLead(row: typeof lead.$inferSelect) {
     outreach_status_at: row.outreachStatusAt,
     created_at: row.createdAt,
     search_query_id: row.searchQueryId,
+    firm_size: row.firmSize,
+    specialties: row.specialties,
+    source_url: row.sourceUrl,
+    fit_reason: row.fitReason,
+    email_outreach_blocked: row.emailOutreachBlocked,
   };
 }
 
@@ -87,14 +92,29 @@ export async function findLeadByDomain(db: LeadsDb, domain: unknown) {
   return row ?? null;
 }
 
+function companyKeyMatch(parsed: ReturnType<typeof parseCompanyName>) {
+  const key = parsed.aliasFamily === 'fels'
+    ? 'fels'
+    : parsed.aliasFamily === 'roedl'
+      ? 'rödl'
+      : parsed.key;
+  if (!key) return null;
+  if (parsed.aliasFamily) {
+    const prefix = `${key} %`;
+    return sql`(
+      scout_company_name_key(${lead.companyName}) = ${key}
+      OR scout_company_name_key(${lead.companyName}) LIKE ${prefix}
+    )`;
+  }
+  return sql`scout_company_name_key(${lead.companyName}) = ${key}`;
+}
+
 export async function findLeadByCompanyName(db: LeadsDb, companyName: unknown) {
-  const nameKey = companyNameKey(companyName);
-  if (!nameKey) return null;
-  const [row] = await db
-    .select()
-    .from(lead)
-    .where(sql`lower(regexp_replace(trim(${lead.companyName}), '\\s+', ' ', 'g')) = ${nameKey}`)
-    .limit(1);
+  const parsed = parseCompanyName(companyName);
+  if (parsed.generic || !parsed.key) return null;
+  const match = companyKeyMatch(parsed);
+  if (!match) return null;
+  const [row] = await db.select().from(lead).where(match).limit(1);
   return row ?? null;
 }
 
@@ -114,6 +134,29 @@ export async function findContactByLinkedIn(db: LeadsDb, linkedin: unknown) {
     .select()
     .from(leadContact)
     .where(eq(leadContact.linkedinUrl, url))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function findContactByNameOnLead(
+  db: LeadsDb,
+  leadId: string,
+  firstName: unknown,
+  lastName: unknown,
+) {
+  const first = String(firstName ?? '').trim().toLowerCase();
+  const last = String(lastName ?? '').trim().toLowerCase();
+  if (!first && !last) return null;
+  const [row] = await db
+    .select()
+    .from(leadContact)
+    .where(
+      and(
+        eq(leadContact.leadId, leadId),
+        sql`lower(coalesce(${leadContact.firstName}, '')) = ${first}`,
+        sql`lower(coalesce(${leadContact.lastName}, '')) = ${last}`,
+      ),
+    )
     .limit(1);
   return row ?? null;
 }
@@ -178,7 +221,11 @@ export async function contactsWithCampaigns(db: LeadsDb, leadId: string) {
 }
 
 export function scoutLeadInsertValues(body: Record<string, unknown>) {
-  const companyName = normalizeCompanyName(body.company_name ?? body.companyName);
+  const parsed = parseCompanyName(body.company_name ?? body.companyName);
+  if (parsed.generic) {
+    throw new Error('company_name ist zu generisch');
+  }
+  const companyName = parsed.displayName ?? normalizeCompanyName(body.company_name ?? body.companyName);
   if (!companyName) throw new Error('company_name erforderlich');
   const domain = normalizeDomain(body.domain);
   const industry =
@@ -192,7 +239,46 @@ export function scoutLeadInsertValues(body: Record<string, unknown>) {
     phone: emptyToNull(body.phone),
     industry,
     status: domain ? (emptyToNull(body.status) ?? 'raw') : 'error_no_domain',
+    firmSize: emptyToNull(body.firm_size ?? body.firmSize),
+    specialties: emptyToNull(body.specialties),
+    sourceUrl: emptyToNull(body.source_url ?? body.sourceUrl),
+    fitReason: emptyToNull(body.fit_reason ?? body.fitReason),
+    emailOutreachBlocked: true,
   };
+}
+
+export function fillLeadNulls(
+  current: typeof lead.$inferSelect,
+  next: Partial<typeof lead.$inferInsert>,
+) {
+  const updates: Partial<typeof lead.$inferInsert> = {};
+  const take = <K extends keyof typeof lead.$inferSelect>(
+    col: K,
+    insertKey: keyof typeof lead.$inferInsert,
+    value: unknown,
+  ) => {
+    if (value === undefined) return;
+    const cur = current[col];
+    if (cur == null || cur === '') {
+      (updates as Record<string, unknown>)[insertKey as string] = value;
+    }
+  };
+  take('companyName', 'companyName', next.companyName);
+  take('street', 'street', next.street);
+  take('city', 'city', next.city);
+  take('countryCode', 'countryCode', next.countryCode);
+  take('phone', 'phone', next.phone);
+  take('industry', 'industry', next.industry);
+  take('firmSize', 'firmSize', next.firmSize);
+  take('specialties', 'specialties', next.specialties);
+  take('sourceUrl', 'sourceUrl', next.sourceUrl);
+  take('fitReason', 'fitReason', next.fitReason);
+  take('searchQueryId', 'searchQueryId', next.searchQueryId);
+  if (!current.domain && next.domain) {
+    updates.domain = next.domain;
+    if (current.status === 'error_no_domain') updates.status = 'raw';
+  }
+  return updates;
 }
 
 export function contactFieldsFromBody(body: Record<string, unknown>) {

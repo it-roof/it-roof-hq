@@ -104,9 +104,16 @@ curl -X POST https://hq.it-roof.com/api/mail/send-html \
 
 ## Scout-API (LinkedIn / Kanzlei Scout)
 
-Bot-API unter `/api/scout/*`. Auth: `Authorization: Bearer <token>`. Der SHA-256-Hash (Hex) des Tokens steht in `SCOUT_API_TOKEN_SHA256` (Leads-DB: `LEADS_DATABASE_URL`). Tabelle `lead` wird nicht verändert; Personen hängen an `lead_contact`, LinkedIn-Status an `campaign_contact` der Kampagne **LinkedIn KI-Schulung Rechtsanwälte** (`channel = linkedin`). Slug in Pfaden: `linkedin-ki-schulung`.
+Bot-API unter `/api/scout/*`. Auth: `Authorization: Bearer <token>`. Der SHA-256-Hash (Hex) des Tokens steht in `SCOUT_API_TOKEN_SHA256` (Leads-DB: `LEADS_DATABASE_URL`). Tabelle `lead` bleibt strukturell gleich (additive Felder); Personen hängen an `lead_contact`, LinkedIn-Status an `campaign_contact` der Kampagne **LinkedIn KI-Schulung Kanzleien** (`channel = linkedin`). Slug in Pfaden: `linkedin-ki-schulung`.
 
-SQL (manuell auf einem Neon-Testbranch): `scripts/leads-scout.sql`, danach `scripts/leads-scout-import-notion.sql`. Prüfung: `scripts/leads-scout-verify.sql`.
+SQL (manuell auf einem Neon-Testbranch): `scripts/leads-scout.sql`. Notion-Import lokal erzeugen — nicht committen:
+
+```bash
+node --import tsx scripts/generate-leads-scout-import-notion.mjs /pfad/zu/leads.json
+# schreibt scripts/leads-scout-import-notion.sql (gitignored)
+```
+
+Prüfung: `scripts/leads-scout-verify.sql`.
 
 ### Endpunkte
 
@@ -114,8 +121,8 @@ SQL (manuell auf einem Neon-Testbranch): `scripts/leads-scout.sql`, danach `scri
 |---|---|---|
 | GET | `/api/scout/leads/lookup?domain=` oder `company_name=` | Kanzlei + Kontakte + Kampagnenstatus |
 | GET | `/api/scout/contacts/lookup?linkedin=` | Person über normalisierte LinkedIn-URL |
-| POST | `/api/scout/leads` | Upsert Kanzlei (Match Domain, sonst normalisierter Firmenname) |
-| POST | `/api/scout/contacts` | Upsert Person (`lead_id` oder Kanzlei-Felder; Dublette `linkedin_url`) |
+| POST | `/api/scout/leads` | Upsert Kanzlei (Match Domain, sonst Firmen-Key; Domain-Treffer füllt nur NULL) |
+| POST | `/api/scout/contacts` | Upsert Person (`lead_id` oder Kanzlei-Felder; Dublette `linkedin_url` oder Name) |
 | GET | `/api/scout/campaigns/{id\|linkedin-ki-schulung}/contacts?status=` | Kampagnenkontakte |
 | PUT | `/api/scout/campaigns/{id\|linkedin-ki-schulung}/contacts/{contactId}` | Upsert `campaign_contact` (`status` Pflicht, `status_at` bei Wechsel) |
 

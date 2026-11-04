@@ -68,6 +68,11 @@ type Lead = {
   outreach_status?: string | null;
   outreach_status_at?: string | null;
   created_at?: string | null;
+  firm_size?: string | null;
+  specialties?: string | null;
+  source_url?: string | null;
+  fit_reason?: string | null;
+  email_outreach_blocked?: boolean | null;
   contacts: LeadContact[];
 };
 
@@ -750,6 +755,24 @@ export function LeadsTab() {
                           })
                         : null}
                     </DetailRow>
+                    <DetailRow label="Größe">{detail.firm_size}</DetailRow>
+                    <DetailRow label="Schwerpunkte">{detail.specialties}</DetailRow>
+                    <DetailRow label="Quelle">
+                      {detail.source_url ? (
+                        <a
+                          href={detail.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-info hover:underline"
+                        >
+                          {detail.source_url}
+                        </a>
+                      ) : null}
+                    </DetailRow>
+                    <DetailRow label="Fit">{detail.fit_reason}</DetailRow>
+                    {detail.email_outreach_blocked ? (
+                      <DetailRow label="E-Mail">gesperrt (LinkedIn-Scout)</DetailRow>
+                    ) : null}
                   </dl>
 
                   <div className="mt-6">

@@ -1,6 +1,7 @@
 -- Scout-Verify: eine Abfrage
 -- Ausgang Produktion vor Migration: lead 1318, lead_contact 902, campaign_lead 963, campaign 3
 -- Soll nach Import: lead_contact 902+281, campaign_contact 281
+-- Neue Leads: bis zu 252 (236 Kanzlei-Keys + 16 generische Personen), minus Treffer auf bestehende Namen.
 --   li_anfrage_gesendet 180, li_vernetzt 79, li_nachfass 16, li_zurueckgestellt 4,
 --   li_absage 1, li_nachricht_gesendet 1, linkedin_url +260, campaign_lead 963 unverändert
 
@@ -25,5 +26,5 @@ SELECT
     FROM campaign_contact cc
     JOIN lead_contact lc ON lc.id = cc.lead_contact_id
     JOIN campaign c ON c.id = cc.campaign_id
-    WHERE c.name = 'LinkedIn KI-Schulung Rechtsanwälte'
+    WHERE c.name IN ('LinkedIn KI-Schulung Kanzleien', 'LinkedIn KI-Schulung Rechtsanwälte')
   ) AS notion_leads;

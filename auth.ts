@@ -17,45 +17,14 @@ import { verifyTotp } from '@/lib/auth/totp';
 const SESSION_MAX_AGE = 60 * 60 * 12; // 12 Stunden
 const useSecureCookies = process.env.NODE_ENV === 'production';
 
-function createAdapter() {
-  return DrizzleAdapter(getDb(), {
+export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
+  ...authConfig,
+  adapter: DrizzleAdapter(getDb(), {
     usersTable: users,
     accountsTable: accounts,
     sessionsTable: sessions,
     verificationTokensTable: verificationTokens,
-  });
-}
-
-type AuthAdapter = ReturnType<typeof createAdapter>;
-let _adapter: AuthAdapter | null = null;
-
-function getAdapter(): AuthAdapter {
-  if (_adapter) return _adapter;
-  _adapter = createAdapter();
-  return _adapter;
-}
-
-/** Lazy: DrizzleAdapter prüft `instanceof` und darf neon() nicht beim Import anstoßen. */
-const adapter = new Proxy({} as AuthAdapter, {
-  get(_target, prop) {
-    if (prop === 'then') return undefined;
-    const real = getAdapter() as unknown as Record<PropertyKey, unknown>;
-    const value = real[prop];
-    return typeof value === 'function' ? value.bind(real) : value;
-  },
-  ownKeys() {
-    return Reflect.ownKeys(getAdapter() as object);
-  },
-  getOwnPropertyDescriptor(_target, prop) {
-    const desc = Object.getOwnPropertyDescriptor(getAdapter(), prop);
-    if (desc) desc.configurable = true;
-    return desc;
-  },
-});
-
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  ...authConfig,
-  adapter,
+  }),
   session: {
     strategy: 'jwt',
     maxAge: SESSION_MAX_AGE,
@@ -146,4 +115,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
-});
+}));

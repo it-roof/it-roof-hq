@@ -14,6 +14,7 @@ function leadFilters(opts: {
   searchQueryIds?: string[];
   status?: string;
   q?: string;
+  excludeBlocked?: boolean;
 }) {
   const filters: SQL[] = [];
   const cities = opts.cities ?? [];
@@ -36,6 +37,9 @@ function leadFilters(opts: {
         ilike(lead.domain, pattern),
       )!,
     );
+  }
+  if (opts.excludeBlocked !== false) {
+    filters.push(eq(lead.emailOutreachBlocked, false));
   }
   return filters;
 }
@@ -98,11 +102,14 @@ export async function POST(req: NextRequest) {
 
     let candidates: { id: string }[];
 
+    let skippedBlocked = 0;
     if (leadIds.length > 0) {
-      candidates = await db
-        .select({ id: lead.id })
+      const rows = await db
+        .select({ id: lead.id, emailOutreachBlocked: lead.emailOutreachBlocked })
         .from(lead)
         .where(inArray(lead.id, leadIds));
+      skippedBlocked = rows.filter((r) => r.emailOutreachBlocked).length;
+      candidates = rows.filter((r) => !r.emailOutreachBlocked).map((r) => ({ id: r.id }));
     } else {
       const filters = leadFilters({ cities, industries, searchQueryIds, status, q });
       if (existingIds.length) filters.push(notInArray(lead.id, existingIds));
@@ -119,6 +126,7 @@ export async function POST(req: NextRequest) {
         ok: true,
         inserted: 0,
         skipped: candidates.length,
+        skipped_blocked: skippedBlocked,
         already_in_campaign: existingIds.length,
       });
     }
@@ -142,6 +150,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       inserted: rows.length,
       skipped: candidates.length - toInsert.length,
+      skipped_blocked: skippedBlocked,
       already_in_campaign: existingIds.length,
     }, { status: 201 });
   } catch (e) {
@@ -253,7 +262,14 @@ export async function DELETE(req: NextRequest) {
 
     let targetLeadIds = leadIds;
     if (leadIds.length === 0) {
-      const filters = leadFilters({ cities, industries, searchQueryIds, status, q });
+      const filters = leadFilters({
+        cities,
+        industries,
+        searchQueryIds,
+        status,
+        q,
+        excludeBlocked: false,
+      });
       const matched = await db
         .select({ id: lead.id })
         .from(lead)

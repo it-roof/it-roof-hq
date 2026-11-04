@@ -1,6 +1,116 @@
 -- Leads DB: Scout / LinkedIn-Kampagne (idempotent, transaktional)
--- Tabelle lead bleibt unverändert.
+-- Tabelle lead: nur additive nullable/boolean Spalten, keine Umstrukturierung.
 BEGIN;
+
+CREATE OR REPLACE FUNCTION scout_company_name_key(raw text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+AS $$
+DECLARE
+  s text;
+  prev text;
+  form text;
+  prefix text;
+  forms text[] := ARRAY[
+    'rechtsanwaltsgesellschaft',
+    'steuerberatungsgesellschaft',
+    'wirtschaftspruefungsgesellschaft',
+    'wirtschaftsprüfungsgesellschaft',
+    'partnerschaftsgesellschaft',
+    'partnergesellschaft',
+    'partnerschaft',
+    'partg mbb',
+    'partgmbb',
+    'part mbb',
+    'partmbb',
+    'gmbh und co kg',
+    'gmbh co kg',
+    'partg',
+    'mbb',
+    'gmbh',
+    'mbh',
+    'gbr',
+    'ag',
+    'kg',
+    'ohg',
+    'ug',
+    'ev',
+    'se'
+  ];
+  prefixes text[] := ARRAY['selbststaendig', 'selbstständig', 'selbständig'];
+  generic text[] := ARRAY[
+    '', '-', 'n a', 'na', 'notar', 'notarin', 'rechtsanwalt', 'rechtsanwaeltin',
+    'rechtsanwältin', 'kanzleiinhaber', 'kanzleiinhaberin', 'eigene kanzlei',
+    'unbekannt', 'selbststaendig', 'selbstständig', 'selbständig',
+    'steuerberater', 'steuerberaterin', 'steuer', 'steuerkanzlei',
+    'einzelkanzlei', 'kanzlei', 'sonstig', 'wp', 'stb', 'wp stb', 'stbin', 'stbg'
+  ];
+  changed boolean;
+BEGIN
+  IF raw IS NULL THEN RETURN NULL; END IF;
+  s := btrim(regexp_replace(raw, '\s+', ' ', 'g'));
+  IF s = '' THEN RETURN NULL; END IF;
+
+  LOOP
+    prev := s;
+    s := regexp_replace(s, '\([^()]*\)', ' ', 'g');
+    EXIT WHEN s = prev;
+  END LOOP;
+
+  s := replace(s, '&', ' und ');
+  s := replace(s, '.', '');
+  s := lower(s);
+  s := regexp_replace(s, '[^a-z0-9äöüß]+', ' ', 'g');
+  s := btrim(regexp_replace(s, '\s+', ' ', 'g'));
+
+  LOOP
+    changed := false;
+    FOREACH prefix IN ARRAY prefixes LOOP
+      IF s = prefix THEN
+        s := '';
+        changed := true;
+        EXIT;
+      ELSIF s LIKE prefix || ' %' THEN
+        s := btrim(substr(s, char_length(prefix) + 2));
+        changed := true;
+        EXIT;
+      END IF;
+    END LOOP;
+    EXIT WHEN NOT changed;
+  END LOOP;
+
+  LOOP
+    changed := false;
+    FOREACH form IN ARRAY forms LOOP
+      IF s = form THEN
+        s := '';
+        changed := true;
+        EXIT;
+      ELSIF s LIKE '% ' || form THEN
+        s := btrim(left(s, char_length(s) - char_length(form) - 1));
+        changed := true;
+        EXIT;
+      END IF;
+    END LOOP;
+    EXIT WHEN NOT changed;
+  END LOOP;
+
+  s := btrim(regexp_replace(s, '\s+', ' ', 'g'));
+  IF s = ANY (generic) THEN RETURN NULL; END IF;
+  IF s = '' THEN RETURN NULL; END IF;
+  RETURN s;
+END;
+$$;
+
+ALTER TABLE lead ADD COLUMN IF NOT EXISTS firm_size text;
+ALTER TABLE lead ADD COLUMN IF NOT EXISTS specialties text;
+ALTER TABLE lead ADD COLUMN IF NOT EXISTS source_url text;
+ALTER TABLE lead ADD COLUMN IF NOT EXISTS fit_reason text;
+ALTER TABLE lead ADD COLUMN IF NOT EXISTS email_outreach_blocked boolean;
+UPDATE lead SET email_outreach_blocked = false WHERE email_outreach_blocked IS NULL;
+ALTER TABLE lead ALTER COLUMN email_outreach_blocked SET DEFAULT false;
+ALTER TABLE lead ALTER COLUMN email_outreach_blocked SET NOT NULL;
 
 ALTER TABLE lead_contact DROP CONSTRAINT IF EXISTS lead_contact_lead_id_key;
 DROP INDEX IF EXISTS lead_contact_lead_id_key;
@@ -25,15 +135,21 @@ BEGIN
   END IF;
 END $$;
 
+UPDATE campaign
+SET name = 'LinkedIn KI-Schulung Kanzleien',
+    channel = 'linkedin'
+WHERE name IN ('LinkedIn KI-Schulung Rechtsanwälte', 'LinkedIn KI-Schulung Kanzleien');
+
 INSERT INTO campaign (name, channel, created_at)
-SELECT 'LinkedIn KI-Schulung Rechtsanwälte', 'linkedin', now()
+SELECT 'LinkedIn KI-Schulung Kanzleien', 'linkedin', now()
 WHERE NOT EXISTS (
-  SELECT 1 FROM campaign WHERE name = 'LinkedIn KI-Schulung Rechtsanwälte'
+  SELECT 1 FROM campaign
+  WHERE name IN ('LinkedIn KI-Schulung Kanzleien', 'LinkedIn KI-Schulung Rechtsanwälte')
 );
 
 UPDATE campaign
 SET channel = 'linkedin'
-WHERE name = 'LinkedIn KI-Schulung Rechtsanwälte'
+WHERE name = 'LinkedIn KI-Schulung Kanzleien'
   AND channel IS DISTINCT FROM 'linkedin';
 
 CREATE TABLE IF NOT EXISTS campaign_contact (

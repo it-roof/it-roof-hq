@@ -24,7 +24,8 @@ export const LINKEDIN_STATUS_DE: Record<LinkedInStatus, string> = {
   li_zurueckgestellt: 'Zurückgestellt',
 };
 
-export const LINKEDIN_CAMPAIGN_NAME = 'LinkedIn KI-Schulung Rechtsanwälte';
+export const LINKEDIN_CAMPAIGN_NAME = 'LinkedIn KI-Schulung Kanzleien';
+export const LINKEDIN_CAMPAIGN_NAME_LEGACY = 'LinkedIn KI-Schulung Rechtsanwälte';
 export const LINKEDIN_CAMPAIGN_SLUG = 'linkedin-ki-schulung';
 
 export const LAW_FIRM_INDUSTRY = 'Rechtsanwaltskanzlei';

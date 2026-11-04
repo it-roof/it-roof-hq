@@ -83,6 +83,21 @@ export async function POST(req: NextRequest) {
     const db = getLeadsDb();
     await assertEmailCampaign(db, campaignId);
 
+    const [blockedLead] = await db
+      .select({ id: lead.id, emailOutreachBlocked: lead.emailOutreachBlocked })
+      .from(lead)
+      .where(eq(lead.id, leadId))
+      .limit(1);
+    if (!blockedLead) {
+      return NextResponse.json({ error: 'lead_id unbekannt' }, { status: 400 });
+    }
+    if (blockedLead.emailOutreachBlocked) {
+      return NextResponse.json(
+        { error: 'Lead ist für E-Mail-Kampagnen gesperrt' },
+        { status: 400 },
+      );
+    }
+
     let currentStepId = emptyToNull(body.current_step_id ?? body.currentStepId);
     if (!currentStepId) {
       const [firstStep] = await db

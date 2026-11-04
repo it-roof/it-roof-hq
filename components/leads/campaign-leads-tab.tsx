@@ -282,7 +282,10 @@ export function CampaignLeadsTab() {
     appendListParams(params, 'city', selectedCities);
     appendListParams(params, 'industry', selectedIndustries);
     appendListParams(params, 'search_query_id', selectedSearches);
-    if (scope === 'new') params.set('exclude_campaign_id', campaignId);
+    if (scope === 'new') {
+      params.set('exclude_campaign_id', campaignId);
+      params.set('exclude_email_blocked', '1');
+    }
     if (scope === 'assigned') params.set('include_campaign_id', campaignId);
 
     const res = await fetch(`/api/leads?${params}`, { signal });

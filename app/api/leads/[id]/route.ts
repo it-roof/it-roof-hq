@@ -28,6 +28,11 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       outreach_status: lead.outreachStatus,
       outreach_status_at: lead.outreachStatusAt,
       created_at: lead.createdAt,
+      firm_size: lead.firmSize,
+      specialties: lead.specialties,
+      source_url: lead.sourceUrl,
+      fit_reason: lead.fitReason,
+      email_outreach_blocked: lead.emailOutreachBlocked,
       contacts: sql<{
         id: string;
         salutation: string | null;
