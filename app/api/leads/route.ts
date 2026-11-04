@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
   ]);
   const excludeCampaignId = (req.nextUrl.searchParams.get('exclude_campaign_id') ?? '').trim();
   const includeCampaignId = (req.nextUrl.searchParams.get('include_campaign_id') ?? '').trim();
+  const excludeEmailBlocked = req.nextUrl.searchParams.get('exclude_email_blocked') === '1';
   const page = parsePage(req.nextUrl.searchParams.get('page'));
   const limit = parseLimit(req.nextUrl.searchParams.get('limit'));
 
@@ -79,6 +80,7 @@ export async function GET(req: NextRequest) {
 
   if (includeCampaignId) base.push(inCampaign(includeCampaignId));
   else if (excludeCampaignId) base.push(notInCampaign(excludeCampaignId));
+  if (excludeEmailBlocked) base.push(eq(lead.emailOutreachBlocked, false));
 
   const listFilters = [...base];
   pushMulti(listFilters, lead.city, cities);
@@ -182,6 +184,7 @@ export async function GET(req: NextRequest) {
         position: string | null;
         email: string | null;
         phone: string | null;
+        linkedin_url: string | null;
       }[]>`
         COALESCE(
           json_agg(
@@ -192,7 +195,8 @@ export async function GET(req: NextRequest) {
               'last_name', ${leadContact.lastName},
               'position', ${leadContact.position},
               'email', ${leadContact.email},
-              'phone', ${leadContact.phone}
+              'phone', ${leadContact.phone},
+              'linkedin_url', ${leadContact.linkedinUrl}
             )
             ORDER BY ${leadContact.lastName} NULLS LAST, ${leadContact.firstName} NULLS LAST
           ) FILTER (WHERE ${leadContact.id} IS NOT NULL),

@@ -27,6 +27,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     name: row.name,
     description: row.description,
     created_at: row.createdAt,
+    channel: row.channel,
     steps,
   });
 }
