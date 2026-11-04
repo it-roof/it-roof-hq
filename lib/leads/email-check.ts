@@ -125,7 +125,7 @@ export async function checkEmail(raw: string | null | undefined): Promise<EmailC
   };
 }
 
-/** Erstes Kontakt-Mail; sonst null. */
+/** Ältester Kontakt mit Mail (created_at, id); sonst null. */
 export function pickContactEmail(
   contacts: { email?: string | null }[] | null | undefined,
 ): string | null {

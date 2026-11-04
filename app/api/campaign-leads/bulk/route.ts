@@ -6,6 +6,7 @@ import { parseListBody, parseListParam } from '@/lib/leads/filter-params';
 import { and, asc, eq, ilike, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { requireSession, unauthorized } from '@/lib/auth/require-session';
 import { writeAudit } from '@/lib/auth/audit';
+import { assertEmailCampaign } from '@/lib/leads/campaign-channel';
 
 function leadFilters(opts: {
   cities?: string[];
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
     }
 
     const db = getLeadsDb();
+    await assertEmailCampaign(db, campaignId);
 
     const [firstStep] = await db
       .select({ id: campaignStep.id })
@@ -174,6 +176,11 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getLeadsDb();
+  try {
+    await assertEmailCampaign(db, campaignId);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Fehler' }, { status: 400 });
+  }
   const filters = leadFilters({ cities, industries, searchQueryIds, status, q });
   const where = and(...filters);
 

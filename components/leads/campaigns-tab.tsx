@@ -47,6 +47,7 @@ import {
   type CampaignStepType,
 } from '@/lib/leads/campaign-steps';
 import { TemplateEditorFields } from '@/components/leads/template-field';
+import { LinkedInCampaignPanel } from '@/components/leads/linkedin-campaign-panel';
 import { cn } from '@/lib/utils';
 import {
   splitHeaderY,
@@ -60,7 +61,9 @@ type Campaign = {
   name: string;
   description: string | null;
   created_at: string | null;
+  channel?: string;
   step_count: number;
+  contact_count?: number;
 };
 
 type Step = {
@@ -168,6 +171,7 @@ export function CampaignsTab() {
 
   const selected = rows.find((c) => c.id === selectedId) ?? null;
   const selectedSteps = selected ? (stepsByCampaign.get(selected.id) ?? []) : [];
+  const selectedIsLinkedIn = selected?.channel === 'linkedin';
   function openCreateCampaign() {
     setEditingCampaignId(null);
     setName('');
@@ -394,7 +398,9 @@ export function CampaignsTab() {
                         )}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {list.length === 0 ? (
+                        {c.channel === 'linkedin' ? (
+                          <span className="text-[12px] text-muted-foreground">LinkedIn</span>
+                        ) : list.length === 0 ? (
                           <span className="text-[12px] text-muted-foreground/70">—</span>
                         ) : (
                           <div className="flex items-center gap-1.5 text-muted-foreground">
@@ -415,7 +421,7 @@ export function CampaignsTab() {
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-[12px] tabular-nums text-muted-foreground">
-                        {list.length}
+                        {c.channel === 'linkedin' ? (c.contact_count ?? 0) : list.length}
                       </TableCell>
                       <TableCell className="hidden font-mono text-[12px] text-muted-foreground lg:table-cell">
                         {formatDate(c.created_at)}
@@ -455,9 +461,11 @@ export function CampaignsTab() {
                   {selected.name}
                 </h2>
                 <p className="mt-1 font-mono text-xs tracking-wide text-muted-foreground">
-                  {selectedSteps.length === 0
-                    ? 'Ablauf noch leer'
-                    : `${selectedSteps.length} Schritt${selectedSteps.length !== 1 ? 'e' : ''}`}
+                  {selectedIsLinkedIn
+                    ? 'LinkedIn-Kampagne'
+                    : selectedSteps.length === 0
+                      ? 'Ablauf noch leer'
+                      : `${selectedSteps.length} Schritt${selectedSteps.length !== 1 ? 'e' : ''}`}
                 </p>
               </div>
               <Button
@@ -480,6 +488,10 @@ export function CampaignsTab() {
               </p>
             )}
 
+            {selectedIsLinkedIn ? (
+              <LinkedInCampaignPanel key={selected.id} campaignId={selected.id} />
+            ) : (
+            <>
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 py-2">
               <p className="text-[11px] font-medium tracking-wide text-muted-foreground">Ablauf</p>
               <Button asChild size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs">
@@ -600,6 +612,8 @@ export function CampaignsTab() {
                 </ol>
               )}
             </div>
+            </>
+            )}
           </>
         ) : (
           <div className={cn('hidden h-full items-center justify-center lg:flex', headerY)}>

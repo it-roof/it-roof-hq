@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     .select()
     .from(leadContact)
     .where(eq(leadContact.leadId, cl.leadId))
-    .orderBy(asc(leadContact.createdAt))
+    .orderBy(asc(leadContact.createdAt), asc(leadContact.id))
     .limit(1);
 
   const rendered = renderStepTemplates(

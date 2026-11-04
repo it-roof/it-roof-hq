@@ -36,6 +36,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
         position: string | null;
         email: string | null;
         phone: string | null;
+        linkedin_url: string | null;
       }[]>`
         COALESCE(
           json_agg(
@@ -46,7 +47,8 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
               'last_name', ${leadContact.lastName},
               'position', ${leadContact.position},
               'email', ${leadContact.email},
-              'phone', ${leadContact.phone}
+              'phone', ${leadContact.phone},
+              'linkedin_url', ${leadContact.linkedinUrl}
             )
             ORDER BY ${leadContact.lastName} NULLS LAST
           ) FILTER (WHERE ${leadContact.id} IS NOT NULL),

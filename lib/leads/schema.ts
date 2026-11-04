@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, varchar, integer, boolean, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, varchar, integer, boolean, primaryKey, index, uniqueIndex, date } from 'drizzle-orm/pg-core';
 
 export const lead = pgTable('lead', {
   id: uuid().defaultRandom().primaryKey().notNull(),
@@ -27,14 +27,19 @@ export const leadContact = pgTable('lead_contact', {
   position: varchar({ length: 255 }),
   email: varchar({ length: 255 }),
   phone: varchar({ length: 255 }),
+  linkedinUrl: text('linkedin_url'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }),
   updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }),
-});
+}, (table) => [
+  index('lead_contact_lead_id_idx').on(table.leadId),
+  uniqueIndex('lead_contact_linkedin_url_key').on(table.linkedinUrl),
+]);
 
 export const campaign = pgTable('campaign', {
   id: uuid().defaultRandom().primaryKey().notNull(),
   name: text().notNull(),
   description: text(),
+  channel: text().notNull().default('email'),
   createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }),
 });
 
@@ -70,6 +75,30 @@ export const campaignLeadAction = pgTable('campaign_lead_action', {
   note: text(),
   actedAt: timestamp('acted_at', { withTimezone: true, mode: 'string' }).notNull(),
 });
+
+export const campaignContact = pgTable('campaign_contact', {
+  id: uuid().defaultRandom().primaryKey().notNull(),
+  campaignId: uuid('campaign_id').notNull(),
+  leadContactId: uuid('lead_contact_id').notNull(),
+  status: text().notNull(),
+  statusAt: timestamp('status_at', { withTimezone: true, mode: 'string' }),
+  notes: text(),
+  nextStep: text('next_step'),
+  requestedAt: date('requested_at', { mode: 'string' }),
+  acceptedAt: date('accepted_at', { mode: 'string' }),
+  writeFrom: date('write_from', { mode: 'string' }),
+  writtenAt: date('written_at', { mode: 'string' }),
+  repliedAt: date('replied_at', { mode: 'string' }),
+  draftSubject: text('draft_subject'),
+  draftBody: text('draft_body'),
+  createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' }),
+  updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }),
+}, (table) => [
+  uniqueIndex('campaign_contact_campaign_id_lead_contact_id_key').on(
+    table.campaignId,
+    table.leadContactId,
+  ),
+]);
 
 export const searchQuery = pgTable('search_query', {
   id: uuid().defaultRandom().primaryKey().notNull(),

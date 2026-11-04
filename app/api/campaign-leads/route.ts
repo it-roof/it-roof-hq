@@ -5,6 +5,7 @@ import { emptyToNull, nowIso, requireString } from '@/lib/leads/http';
 import { pageMeta, pageOffset, parseLimit, parsePage } from '@/lib/leads/pagination';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { requireSession, unauthorized } from '@/lib/auth/require-session';
+import { assertEmailCampaign } from '@/lib/leads/campaign-channel';
 
 export async function GET(req: NextRequest) {
   if (!(await requireSession())) return unauthorized();
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
     const status = (body.status ?? 'active').trim() || 'active';
 
     const db = getLeadsDb();
+    await assertEmailCampaign(db, campaignId);
 
     let currentStepId = emptyToNull(body.current_step_id ?? body.currentStepId);
     if (!currentStepId) {

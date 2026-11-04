@@ -52,6 +52,7 @@ type LeadContact = {
   position: string | null;
   email: string | null;
   phone: string | null;
+  linkedin_url?: string | null;
 };
 
 type Lead = {
@@ -869,6 +870,17 @@ function ContactPopoverItem({ contact: c }: { contact: LeadContact }) {
           onClick={(e) => e.stopPropagation()}
         >
           {c.email}
+        </a>
+      )}
+      {c.linkedin_url && (
+        <a
+          href={c.linkedin_url}
+          target="_blank"
+          rel="noreferrer"
+          className="font-mono text-[11px] text-info hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          LinkedIn
         </a>
       )}
       {c.phone && (
