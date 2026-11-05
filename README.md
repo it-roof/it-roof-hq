@@ -102,6 +102,62 @@ curl -X POST https://hq.it-roof.com/api/mail/send-html \
   }'
 ```
 
+## Scout-API (LinkedIn / Kanzlei Scout)
+
+Bot-API unter `/api/scout/*`. Auth: `Authorization: Bearer <token>`. Der SHA-256-Hash (Hex) des Tokens steht in `SCOUT_API_TOKEN_SHA256` (Leads-DB: `LEADS_DATABASE_URL`). Tabelle `lead` bleibt strukturell gleich (additive Felder); Personen hängen an `lead_contact`, LinkedIn-Status an `campaign_contact` der Kampagne **LinkedIn KI-Schulung Kanzleien** (`channel = linkedin`). Slug in Pfaden: `linkedin-ki-schulung`.
+
+SQL (manuell auf einem Neon-Testbranch): `scripts/leads-scout.sql`. Notion-Import lokal erzeugen — nicht committen:
+
+```bash
+node --import tsx scripts/generate-leads-scout-import-notion.mjs /pfad/zu/leads.json
+# schreibt scripts/leads-scout-import-notion.sql (gitignored)
+```
+
+Prüfung: `scripts/leads-scout-verify.sql`.
+
+### Endpunkte
+
+| Methode | Pfad | Zweck |
+|---|---|---|
+| GET | `/api/scout/leads/lookup?domain=` oder `company_name=` | Kanzlei + Kontakte + Kampagnenstatus |
+| GET | `/api/scout/contacts/lookup?linkedin=` | Person über normalisierte LinkedIn-URL |
+| POST | `/api/scout/leads` | Upsert Kanzlei (Match Domain, sonst Firmen-Key; Domain-Treffer füllt nur NULL) |
+| POST | `/api/scout/contacts` | Upsert Person (`lead_id` oder Kanzlei-Felder; Dublette `linkedin_url` oder Name) |
+| GET | `/api/scout/campaigns/{id\|linkedin-ki-schulung}/contacts?status=` | Kampagnenkontakte |
+| PUT | `/api/scout/campaigns/{id\|linkedin-ki-schulung}/contacts/{contactId}` | Upsert `campaign_contact` (`status` Pflicht, `status_at` bei Wechsel) |
+
+LinkedIn-URLs werden gespeichert als `https://`, ohne `www.`, ohne Query/Fragment, ohne Slash am Ende, lowercase.
+
+### curl
+
+```bash
+export SCOUT_TOKEN='…'
+
+curl -sS "$HOST/api/scout/leads/lookup?company_name=Beispielkanzlei" \
+  -H "Authorization: Bearer $SCOUT_TOKEN"
+
+curl -sS "$HOST/api/scout/contacts/lookup?linkedin=https://www.linkedin.com/in/beispiel/" \
+  -H "Authorization: Bearer $SCOUT_TOKEN"
+
+curl -sS -X POST "$HOST/api/scout/leads" \
+  -H "Authorization: Bearer $SCOUT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"company_name":"Beispielkanzlei","domain":"beispiel.de","city":"Bamberg","region":"oberfranken"}'
+
+curl -sS -X POST "$HOST/api/scout/contacts" \
+  -H "Authorization: Bearer $SCOUT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"company_name":"Beispielkanzlei","first_name":"Ada","last_name":"Beispiel","linkedin_url":"https://www.linkedin.com/in/ada-beispiel/"}'
+
+curl -sS -X PUT "$HOST/api/scout/campaigns/linkedin-ki-schulung/contacts/<CONTACT_ID>" \
+  -H "Authorization: Bearer $SCOUT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"li_anfrage_gesendet","notes":"Anfrage raus"}'
+
+curl -sS "$HOST/api/scout/campaigns/linkedin-ki-schulung/contacts?status=li_anfrage_gesendet" \
+  -H "Authorization: Bearer $SCOUT_TOKEN"
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

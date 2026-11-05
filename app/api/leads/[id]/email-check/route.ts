@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { requireSession, unauthorized } from '@/lib/auth/require-session';
 import { getLeadsDb } from '@/lib/leads/db';
 import { checkEmail, pickContactEmail } from '@/lib/leads/email-check';
@@ -37,7 +37,8 @@ export async function POST(_req: Request, { params }: Ctx) {
   const contacts = await db
     .select({ email: leadContact.email })
     .from(leadContact)
-    .where(eq(leadContact.leadId, id));
+    .where(eq(leadContact.leadId, id))
+    .orderBy(asc(leadContact.createdAt), asc(leadContact.id));
 
   const email = pickContactEmail(contacts);
   const result = await checkEmail(email);

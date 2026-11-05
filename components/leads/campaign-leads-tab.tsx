@@ -39,6 +39,7 @@ type Campaign = {
   id: string;
   name: string;
   description: string | null;
+  channel?: string;
   step_count: number;
   lead_count: number;
   active_count: number;
@@ -231,10 +232,13 @@ export function CampaignLeadsTab() {
           stepsByCampaign.set(s.campaignId, list);
         }
         setCampaigns(
-          (campsData.campaigns ?? []).map((c: {
+          (campsData.campaigns ?? [])
+            .filter((c: { channel?: string }) => c.channel !== 'linkedin')
+            .map((c: {
             id: string;
             name: string;
             description: string | null;
+            channel?: string;
             step_count?: number;
             lead_count?: number;
             active_count?: number;
@@ -243,6 +247,7 @@ export function CampaignLeadsTab() {
             id: c.id,
             name: c.name,
             description: c.description,
+            channel: c.channel,
             step_count: c.step_count ?? 0,
             lead_count: c.lead_count ?? 0,
             active_count: c.active_count ?? 0,
@@ -277,7 +282,10 @@ export function CampaignLeadsTab() {
     appendListParams(params, 'city', selectedCities);
     appendListParams(params, 'industry', selectedIndustries);
     appendListParams(params, 'search_query_id', selectedSearches);
-    if (scope === 'new') params.set('exclude_campaign_id', campaignId);
+    if (scope === 'new') {
+      params.set('exclude_campaign_id', campaignId);
+      params.set('exclude_email_blocked', '1');
+    }
     if (scope === 'assigned') params.set('include_campaign_id', campaignId);
 
     const res = await fetch(`/api/leads?${params}`, { signal });

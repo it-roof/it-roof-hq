@@ -48,7 +48,7 @@ export async function GET(req: NextRequest, { params }: Ctx) {
         .select()
         .from(leadContact)
         .where(inArray(leadContact.leadId, leadIds))
-        .orderBy(asc(leadContact.createdAt))
+        .orderBy(asc(leadContact.createdAt), asc(leadContact.id))
     : [];
 
   const firstContactByLead = new Map<string, (typeof contacts)[number]>();

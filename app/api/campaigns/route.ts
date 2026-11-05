@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeadsDb } from '@/lib/leads/db';
-import { campaign, campaignLead, campaignStep } from '@/lib/leads/schema';
+import { campaign, campaignContact, campaignLead, campaignStep } from '@/lib/leads/schema';
 import { emptyToNull, nowIso, requireString } from '@/lib/leads/http';
 import { desc, eq, ilike, sql } from 'drizzle-orm';
 import { requireSession, unauthorized } from '@/lib/auth/require-session';
@@ -16,14 +16,17 @@ export async function GET(req: NextRequest) {
       name: campaign.name,
       description: campaign.description,
       created_at: campaign.createdAt,
+      channel: campaign.channel,
       step_count: sql<number>`count(distinct ${campaignStep.id})::int`,
       lead_count: sql<number>`count(distinct ${campaignLead.id})::int`,
+      contact_count: sql<number>`count(distinct ${campaignContact.id})::int`,
       active_count: sql<number>`count(distinct ${campaignLead.id}) filter (where ${campaignLead.status} <> 'done')::int`,
       done_count: sql<number>`count(distinct ${campaignLead.id}) filter (where ${campaignLead.status} = 'done')::int`,
     })
     .from(campaign)
     .leftJoin(campaignStep, eq(campaignStep.campaignId, campaign.id))
     .leftJoin(campaignLead, eq(campaignLead.campaignId, campaign.id))
+    .leftJoin(campaignContact, eq(campaignContact.campaignId, campaign.id))
     .where(q ? ilike(campaign.name, `%${q}%`) : undefined)
     .groupBy(campaign.id)
     .orderBy(desc(campaign.createdAt));
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest) {
       .values({
         name,
         description: emptyToNull(body.description),
+        channel: 'email',
         createdAt: nowIso(),
       })
       .returning();

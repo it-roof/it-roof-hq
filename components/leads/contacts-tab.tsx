@@ -21,6 +21,7 @@ type Contact = {
   position: string | null;
   email: string | null;
   phone: string | null;
+  linkedinUrl?: string | null;
 };
 
 const EMPTY = {
@@ -134,6 +135,20 @@ export function ContactsTab() {
                   <p className="text-sm font-medium truncate">{name}</p>
                   <p className="text-[11px] font-mono text-muted-foreground truncate">
                     {[c.position, c.email].filter(Boolean).join(' · ') || c.leadId.slice(0, 8)}
+                    {c.linkedinUrl ? (
+                      <>
+                        {' · '}
+                        <a
+                          href={c.linkedinUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-info hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          LinkedIn
+                        </a>
+                      </>
+                    ) : null}
                   </p>
                 </div>
                 <Button size="icon" variant="ghost" className="size-8" onClick={() => openEdit(c)}>

@@ -42,3 +42,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Notion-Import enthält Personendaten — nur lokal erzeugen
+scripts/leads-scout-import-notion.sql
+scripts/data/

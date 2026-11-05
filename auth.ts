@@ -2,7 +2,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { DrizzleAdapter } from '@auth/drizzle-adapter';
 import { eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
+import { db, getDb } from '@/lib/db';
 import { accounts, sessions, users, verificationTokens } from '@/lib/schema';
 import authConfig from '@/auth.config';
 import {
@@ -17,9 +17,9 @@ import { verifyTotp } from '@/lib/auth/totp';
 const SESSION_MAX_AGE = 60 * 60 * 12; // 12 Stunden
 const useSecureCookies = process.env.NODE_ENV === 'production';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut } = NextAuth(() => ({
   ...authConfig,
-  adapter: DrizzleAdapter(db, {
+  adapter: DrizzleAdapter(getDb(), {
     usersTable: users,
     accountsTable: accounts,
     sessionsTable: sessions,
@@ -115,4 +115,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return session;
     },
   },
-});
+}));
