@@ -1,13 +1,15 @@
 import nodemailer from 'nodemailer';
 import MailComposer from 'nodemailer/lib/mail-composer';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { mailboxFolder, mailboxMessage } from '@/lib/schema';
 import { getMailboxCredentials, type MailboxCredentials } from '@/lib/mail/mailbox';
 import { folderRole, withImap } from '@/lib/mail/imap';
+import { buildOutgoingBodies } from '@/lib/mail/compose-body';
 import {
   formatMessageId,
   messageIdFromRaw,
+  messageIdVariants,
   snippetFrom,
   stringifyAddressList,
   threadIdFromHeaders,
@@ -17,24 +19,6 @@ type Addr = { name?: string | null; address: string };
 
 function toComposerAddr(a: Addr) {
   return a.name ? { name: a.name, address: a.address } : a.address;
-}
-
-function htmlToPlainText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<img[^>]+alt=["']([^"']*)["'][^>]*>/gi, '[$1]')
-    .replace(/<img[^>]*>/gi, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 }
 
 async function ensureSentFolder(creds: MailboxCredentials) {
@@ -102,6 +86,48 @@ async function ensureSentFolder(creds: MailboxCredentials) {
   return created!;
 }
 
+async function appendToImapSent(
+  creds: MailboxCredentials,
+  folderPath: string,
+  raw: Buffer,
+): Promise<number | null> {
+  return withImap(creds, async client => {
+    const tryAppend = async (path: string) => {
+      const appended = await client.append(path, raw, ['\\Seen']);
+      if (appended && typeof appended === 'object' && 'uid' in appended && appended.uid != null) {
+        return Number(appended.uid);
+      }
+      return null;
+    };
+
+    try {
+      return await tryAppend(folderPath);
+    } catch {
+      try {
+        await client.mailboxCreate(folderPath);
+      } catch {
+        // existiert schon oder Server erlaubt kein CREATE
+      }
+      try {
+        return await tryAppend(folderPath);
+      } catch {
+        const listed = await client.list();
+        for (const box of listed) {
+          if (box.flags.has('\\Noselect') || box.flags.has('\\NonExistent')) continue;
+          if (folderRole(box.path, box.specialUse, box.name) !== 'sent') continue;
+          if (box.path === folderPath) continue;
+          try {
+            return await tryAppend(box.path);
+          } catch {
+            // nächsten Sent-Pfad versuchen
+          }
+        }
+        throw new Error(`IMAP APPEND nach ${folderPath} fehlgeschlagen`);
+      }
+    }
+  });
+}
+
 export async function sendMail(opts: {
   mailboxId: string;
   userId: string;
@@ -118,17 +144,11 @@ export async function sendMail(opts: {
   if (!creds) throw new Error('Postfach nicht gefunden');
   if (!opts.to.length) throw new Error('Empfänger fehlt');
 
-  let htmlBody: string | undefined;
-  let textBody: string;
-
-  if (opts.isHtml) {
-    const signature = creds.signatureHtml ? `<div style="margin-top: 1em;">${creds.signatureHtml}</div>` : '';
-    htmlBody = opts.text + signature;
-    textBody = htmlToPlainText(htmlBody);
-  } else {
-    const signature = creds.signatureHtml ? '\n\n' + htmlToPlainText(creds.signatureHtml) : '';
-    textBody = opts.text + signature;
-  }
+  const { html: htmlBody, text: textBody } = buildOutgoingBodies({
+    text: opts.text,
+    isHtml: opts.isHtml,
+    signatureHtml: creds.signatureHtml,
+  });
 
   const mailOpts = {
     from: creds.displayName ? { name: creds.displayName, address: creds.email } : creds.email,
@@ -168,19 +188,14 @@ export async function sendMail(opts: {
   let uid: number | null = null;
   if (sentFolder && !sentFolder.imapPath.startsWith('__local_')) {
     try {
-      await withImap(creds, async client => {
-        const appended = await client.append(sentFolder.imapPath, raw, ['\\Seen']);
-        if (appended && typeof appended === 'object' && 'uid' in appended && appended.uid != null) {
-          uid = Number(appended.uid);
-        }
-      });
+      uid = await appendToImapSent(creds, sentFolder.imapPath, raw);
     } catch {
-      // Mail ist schon raus — Gesendet-Kopie folgt beim Sync
+      // SMTP ist raus — lokale Gesendet-Kopie trotzdem speichern
     }
   }
 
   if (sentFolder) {
-    await db.insert(mailboxMessage).values({
+    const values = {
       mailboxId: creds.id,
       folderId: sentFolder.id,
       uid,
@@ -203,7 +218,32 @@ export async function sendMail(opts: {
       htmlBody: htmlBody ?? null,
       hasAttachments: false,
       size: raw.length,
-    });
+    };
+
+    const variants = storedMessageId ? messageIdVariants(storedMessageId) : [];
+    const existing = variants.length
+      ? (await db
+          .select({ id: mailboxMessage.id })
+          .from(mailboxMessage)
+          .where(and(
+            eq(mailboxMessage.folderId, sentFolder.id),
+            inArray(mailboxMessage.messageIdHeader, variants),
+          ))
+          .limit(1))[0]
+      : undefined;
+
+    try {
+      if (existing) {
+        await db.update(mailboxMessage).set({
+          ...values,
+          updatedAt: new Date(),
+        }).where(eq(mailboxMessage.id, existing.id));
+      } else {
+        await db.insert(mailboxMessage).values(values);
+      }
+    } catch {
+      // UID-Kollision mit parallel laufendem Sync — Mail liegt schon in Gesendet
+    }
   }
 
   if (opts.draftId) {

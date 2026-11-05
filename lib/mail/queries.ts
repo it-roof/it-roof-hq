@@ -69,7 +69,13 @@ export async function listMessages(opts: {
   let folderIds = folders.map(f => f.id);
   if (opts.folderId) folderIds = folderIds.filter(id => id === opts.folderId);
   else if (opts.role) folderIds = folders.filter(f => f.role === opts.role).map(f => f.id);
+  else folderIds = folders.filter(f => f.role === 'inbox').map(f => f.id);
   if (!folderIds.length) return [];
+
+  // Gesendet/Entwürfe einzeln anzeigen — Threading würde mehrere Outbound-Mails
+  // mit gleichem Verlauf zu einem Inbox-ähnlichen Eintrag zusammenziehen.
+  const threaded = Boolean(opts.threaded) && opts.role !== 'sent' && opts.role !== 'drafts'
+    && !folders.some(f => f.id === opts.folderId && (f.role === 'sent' || f.role === 'drafts'));
 
   const filters = [inArray(mailboxMessage.folderId, folderIds)];
   const q = opts.q?.trim();
@@ -104,7 +110,7 @@ export async function listMessages(opts: {
     .from(mailboxMessage)
     .where(and(...filters))
     .orderBy(desc(mailboxMessage.date))
-    .limit(opts.threaded ? 400 : (opts.limit ?? 120));
+    .limit(threaded ? 400 : (opts.limit ?? 120));
 
   const mapped = rows.map(r => ({
     id: r.id,
@@ -126,7 +132,7 @@ export async function listMessages(opts: {
     thread_count: 1,
   }));
 
-  if (!opts.threaded) return mapped;
+  if (!threaded) return mapped.slice(0, opts.limit ?? 120);
 
   const byThread = new Map<string, MailMessageListItem[]>();
   for (const m of mapped) {

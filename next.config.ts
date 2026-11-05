@@ -21,7 +21,7 @@ const securityHeaders = [
       // Next.js / Auth.js brauchen Inline-Scripts in Dev & Prod
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
       "connect-src 'self'",
       "worker-src 'self' blob:",

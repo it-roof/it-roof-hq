@@ -76,7 +76,7 @@ export function MailApp() {
   }, [q]);
 
   const loadBoxes = useCallback(async () => {
-    const r = await fetch('/api/mail/accounts');
+    const r = await fetch('/api/mail/accounts', { cache: 'no-store' });
     const data = await r.json();
     setBoxes(Array.isArray(data) ? data : []);
   }, []);
@@ -84,27 +84,40 @@ export function MailApp() {
   const loadFolders = useCallback(async () => {
     const sp = new URLSearchParams();
     if (mailboxId !== 'all') sp.set('mailbox_id', mailboxId);
-    const r = await fetch(`/api/mail/folders?${sp}`);
+    const r = await fetch(`/api/mail/folders?${sp}`, { cache: 'no-store' });
     const data = await r.json();
     setFolders(Array.isArray(data) ? data : []);
   }, [mailboxId]);
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (signal?: AbortSignal) => {
     const sp = new URLSearchParams();
     if (mailboxId !== 'all') sp.set('mailbox_id', mailboxId);
     if (folderId) sp.set('folder_id', folderId);
-    else if (role) sp.set('role', role);
+    else sp.set('role', role || 'inbox');
     if (qDebounced) sp.set('q', qDebounced);
-    sp.set('threaded', '1');
-    const r = await fetch(`/api/mail/messages?${sp}`);
-    const data = await r.json();
-    setMessages(Array.isArray(data) ? data : []);
-    setLoading(false);
+    sp.set('threaded', role === 'sent' || role === 'drafts' ? '0' : '1');
+    try {
+      const r = await fetch(`/api/mail/messages?${sp}`, { cache: 'no-store', signal });
+      if (signal?.aborted) return;
+      const data = await r.json();
+      if (signal?.aborted) return;
+      setMessages(Array.isArray(data) ? data : []);
+      setLoading(false);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      setMessages([]);
+      setLoading(false);
+    }
   }, [mailboxId, folderId, role, qDebounced]);
 
   useEffect(() => { void loadBoxes(); }, [loadBoxes]);
   useEffect(() => { void loadFolders(); }, [loadFolders]);
-  useEffect(() => { void loadMessages(); }, [loadMessages]);
+  useEffect(() => {
+    const ac = new AbortController();
+    setLoading(true);
+    void loadMessages(ac.signal);
+    return () => ac.abort();
+  }, [loadMessages]);
 
   useEffect(() => {
     const iv = setInterval(() => {
@@ -116,7 +129,7 @@ export function MailApp() {
 
   async function openMessage(id: string) {
     setSelectedId(id);
-    const r = await fetch(`/api/mail/messages/${id}?thread=1`);
+    const r = await fetch(`/api/mail/messages/${id}?thread=1`, { cache: 'no-store' });
     if (!r.ok) return;
     const data = await r.json() as { message?: MailMessageDetail; thread?: MailMessageListItem[] };
     if (data.message) {
@@ -180,6 +193,16 @@ export function MailApp() {
     setDetail(d => d && d.id === id ? { ...d, flagged } : d);
   }
 
+  function selectFolder(next: { folderId?: string | null; role: string }) {
+    setFolderId(next.folderId ?? null);
+    setRole(next.role);
+    setSelectedId(null);
+    setDetail(null);
+    setThread([]);
+    setMessages([]);
+    setLoading(true);
+  }
+
   const groupedFolders = useMemo(() => {
     const source = mailboxId === 'all' ? folders : folders.filter(f => f.mailbox_id === mailboxId);
     const byRole = new Map<string, MailFolder>();
@@ -235,10 +258,7 @@ export function MailApp() {
           value={mailboxId}
           onChange={e => {
             setMailboxId(e.target.value);
-            setFolderId(null);
-            setRole('inbox');
-            setSelectedId(null);
-            setDetail(null);
+            selectFolder({ role: 'inbox' });
           }}
         >
           <option value="all">Alle Postfächer</option>
@@ -261,53 +281,61 @@ export function MailApp() {
         <Button size="icon-sm" variant="ghost" title="Konten" onClick={() => setAccountOpen(true)}>
           <Settings2Icon className="size-3.5" />
         </Button>
+        <select
+          className="h-8 max-w-[11rem] shrink-0 rounded-lg border border-input bg-transparent px-2 text-sm"
+          value={folderId ?? `role:${role}`}
+          onChange={e => {
+            const v = e.target.value;
+            if (v.startsWith('role:')) selectFolder({ role: v.slice(5) });
+            else {
+              const f = groupedFolders.find(x => x.id === v);
+              selectFolder({ folderId: v, role: f?.role ?? 'other' });
+            }
+          }}
+        >
+          {groupedFolders.map(f => (
+            <option key={f.id} value={f.id.startsWith('role:') ? f.id : f.id}>
+              {f.name}{f.unread > 0 ? ` (${f.unread})` : ''}
+            </option>
+          ))}
+        </select>
         <Button size="sm" onClick={() => setCompose({ mode: 'new' })}>
           <PenLineIcon className="size-3.5" />
           Neu
         </Button>
       </div>
 
-      <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize="18%" minSize="12%" className="hidden min-h-0 md:block">
-          <nav className="h-full overflow-y-auto py-2">
-            {groupedFolders.map(f => {
-              const Icon = ROLE_ICON[f.role] ?? MailIcon;
-              const key = f.id.startsWith('role:') ? f.id : f.id;
-              const active = f.id.startsWith('role:')
-                ? !folderId && role === f.role
-                : folderId === f.id;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    if (f.id.startsWith('role:')) {
-                      setFolderId(null);
-                      setRole(f.role);
-                    } else {
-                      setFolderId(f.id);
-                      setRole(f.role);
-                    }
-                    setSelectedId(null);
-                    setDetail(null);
-                  }}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm',
-                    active ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  )}
-                >
-                  <Icon className="size-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                  {f.unread > 0 && (
-                    <span className="font-mono text-[11px] tabular-nums">{f.unread}</span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </ResizablePanel>
-        <ResizableHandle className="hidden md:flex" />
-        <ResizablePanel defaultSize="32%" minSize="20%" className={cn('min-h-0', detail && 'hidden md:block')}>
+      <div className="flex min-h-0 flex-1">
+        <nav className="hidden w-48 shrink-0 overflow-y-auto border-r border-border py-2 md:block">
+          {groupedFolders.map(f => {
+            const Icon = ROLE_ICON[f.role] ?? MailIcon;
+            const active = f.id.startsWith('role:')
+              ? !folderId && role === f.role
+              : folderId === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => {
+                  if (f.id.startsWith('role:')) selectFolder({ role: f.role });
+                  else selectFolder({ folderId: f.id, role: f.role });
+                }}
+                className={cn(
+                  'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm',
+                  active ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                )}
+              >
+                <Icon className="size-3.5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                {f.unread > 0 && (
+                  <span className="font-mono text-[11px] tabular-nums">{f.unread}</span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+        <ResizablePanelGroup orientation="horizontal" className="min-h-0 min-w-0 flex-1">
+        <ResizablePanel defaultSize="40%" minSize="20%" className={cn('min-h-0', detail && 'hidden md:block')}>
           <div className="h-full overflow-y-auto">
             {loading ? (
               <p className="px-4 py-6 text-sm text-muted-foreground">Laden…</p>
@@ -337,7 +365,9 @@ export function MailApp() {
                 >
                   <div className="flex items-center gap-2">
                     <span className={cn('min-w-0 flex-1 truncate text-sm', !m.seen && 'font-semibold')}>
-                      {m.from_name || m.from_address || '(Unbekannt)'}
+                      {role === 'sent' || m.folder_role === 'sent'
+                        ? `An ${m.to_addresses.map(a => a.name || a.address).filter(Boolean).join(', ') || '—'}`
+                        : (m.from_name || m.from_address || '(Unbekannt)')}
                     </span>
                     {m.has_attachments && <PaperclipIcon className="size-3 text-muted-foreground" />}
                     {m.flagged && <StarIcon className="size-3 text-warning" />}
@@ -429,6 +459,7 @@ export function MailApp() {
           )}
         </ResizablePanel>
       </ResizablePanelGroup>
+      </div>
 
       <MailAccountDialog
         open={accountOpen}
@@ -443,7 +474,15 @@ export function MailApp() {
           mailboxId={mailboxId === 'all' ? (boxes[0]?.id ?? '') : mailboxId}
           source={compose.source}
           onClose={() => setCompose(null)}
-          onSent={() => { void loadMessages(); void loadFolders(); }}
+          onSent={() => {
+            setFolderId(null);
+            setSelectedId(null);
+            setDetail(null);
+            setThread([]);
+            setRole('sent');
+            void loadFolders();
+            if (role === 'sent') void loadMessages();
+          }}
         />
       )}
     </div>

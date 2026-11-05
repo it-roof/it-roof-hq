@@ -6,19 +6,22 @@ import { deleteMessage, setMessageFlags } from '@/lib/mail/actions';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSession();
   if (!session) return unauthorized();
   const { id } = await params;
+  const headers = { 'Cache-Control': 'no-store' };
   if (req.nextUrl.searchParams.get('thread') === '1') {
     const row = await getMessage(id, session.user.id);
-    if (!row) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 });
+    if (!row) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404, headers });
     const thread = await getThreadMessages(row.thread_id, session.user.id);
-    return NextResponse.json({ message: row, thread });
+    return NextResponse.json({ message: row, thread }, { headers });
   }
   const row = await getMessage(id, session.user.id);
-  if (!row) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404 });
-  return NextResponse.json(row);
+  if (!row) return NextResponse.json({ error: 'Nicht gefunden' }, { status: 404, headers });
+  return NextResponse.json(row, { headers });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

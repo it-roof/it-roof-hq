@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { SaveForm } from '@/components/save-form';
+import { previewOutgoingHtml } from '@/lib/mail/compose-body';
 import type { MailboxPublic, MailMessageDetail } from '@/lib/mail/types';
 
 type Mode = 'new' | 'reply' | 'replyAll' | 'forward' | 'draft';
@@ -90,6 +91,12 @@ export function MailCompose({ open, mode, mailboxes, mailboxId, source, onClose,
   }, [open, mode, source, mailboxId, mailboxes]);
 
   const title = mode === 'forward' ? 'Weiterleiten' : mode === 'new' ? 'Neue Nachricht' : mode === 'draft' ? 'Entwurf' : 'Antworten';
+  const selectedBox = mailboxes.find(b => b.id === boxId) ?? mailboxes[0];
+  const previewHtml = previewOutgoingHtml({
+    text,
+    isHtml,
+    signatureHtml: selectedBox?.signature_html,
+  });
 
   async function send() {
     setSaving(true);
@@ -198,23 +205,22 @@ export function MailCompose({ open, mode, mailboxes, mailboxId, source, onClose,
               </label>
             )}
           </div>
-          {showPreview && isHtml ? (
+          <Textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder={isHtml ? '<p>Nachricht...</p>' : 'Nachricht...'}
+            className={`min-h-36 ${isHtml ? 'font-mono text-xs' : 'text-sm'}`}
+          />
+          {showPreview && isHtml && (
             <div className="flex flex-col gap-1.5">
-              <Label>Vorschau</Label>
+              <Label>Vorschau (inkl. Signatur, wie gesendet)</Label>
               <iframe
                 title="HTML-Vorschau"
                 sandbox="allow-same-origin"
-                srcDoc={text}
+                srcDoc={previewHtml}
                 className="min-h-48 w-full rounded-md border border-input bg-background"
               />
             </div>
-          ) : (
-            <Textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              placeholder={isHtml ? '<p>Nachricht...</p>' : 'Nachricht...'}
-              className={`min-h-48 ${isHtml ? 'font-mono text-xs' : 'text-sm'}`}
-            />
           )}
           {error && <p className="text-sm text-danger">{error}</p>}
         </SaveForm>
