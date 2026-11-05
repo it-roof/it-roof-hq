@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "AUTH_SECRET=test-auth-secret-for-inbox-watch-tests-32ch DATABASE_URL=postgresql://inbox-watch-test:inbox-watch-test@127.0.0.1/inbox-watch-test CRON_SECRET=cron-secret-distinct-from-inbox-watch node --import tsx --test --test-concurrency=1 lib/auth/inbox-watch-path.test.ts lib/auth/require-inbox-watch-token.test.ts lib/mail/inbox-watch.test.ts app/api/mail/inbox-watch-auth.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",

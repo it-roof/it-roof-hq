@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
+import { hasBearerToken, isInboxWatchApiPath } from '@/lib/auth/inbox-watch-path';
 
 function isPublicPath(pathname: string) {
   if (pathname.startsWith('/api/auth')) return true;
@@ -25,6 +26,12 @@ export default {
   callbacks: {
     authorized({ auth, request }) {
       if (isPublicPath(request.nextUrl.pathname)) return true;
+      if (
+        isInboxWatchApiPath(request.nextUrl.pathname)
+        && hasBearerToken(request.headers.get('authorization'))
+      ) {
+        return true;
+      }
       return !!auth;
     },
   },
