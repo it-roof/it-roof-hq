@@ -1,16 +1,14 @@
 'use client';
 
-import { Suspense } from 'react';
 import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { LeadsTab } from '@/components/leads/leads-tab';
-import { Skeleton } from '@/components/ui/skeleton';
 
 export default function LeadsPage() {
   return (
-    <DashboardShell title="Leads" fullHeight>
-      <Suspense fallback={<Skeleton className="m-6 h-64 w-full rounded-lg" />}>
+    <DashboardShell title="Leads">
+      <div className="px-4 lg:px-6">
         <LeadsTab />
-      </Suspense>
+      </div>
     </DashboardShell>
   );
 }
