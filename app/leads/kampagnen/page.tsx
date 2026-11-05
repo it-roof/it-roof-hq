@@ -1,12 +1,12 @@
 'use client';
 
-import { PageContainer } from '@/components/page-container';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { CampaignsTab } from '@/components/leads/campaigns-tab';
 
 export default function LeadsKampagnenPage() {
   return (
-    <PageContainer fill>
+    <DashboardShell title="Kampagnen" fullHeight>
       <CampaignsTab />
-    </PageContainer>
+    </DashboardShell>
   );
 }

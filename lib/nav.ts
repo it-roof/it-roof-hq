@@ -15,6 +15,10 @@ import {
   MailIcon,
   Settings2Icon,
   FileBarChartIcon,
+  BriefcaseIcon,
+  TargetIcon,
+  LayoutPanelLeftIcon,
+  RadioIcon,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -24,9 +28,18 @@ export type NavLink = {
   icon: LucideIcon;
 };
 
+export type OsAreaId =
+  | 'crm-bestand'
+  | 'crm-akquise'
+  | 'workspace'
+  | 'kanaele';
+
 export type OsArea = {
-  id: 'aufgaben' | 'studio' | 'leads' | 'mail';
+  id: OsAreaId;
+  /** Full name in sidebar / breadcrumbs */
   label: string;
+  /** Compact label in the area switcher */
+  shortLabel: string;
   icon: LucideIcon;
   /** Landing when switching into this area */
   href: string;
@@ -35,36 +48,32 @@ export type OsArea = {
   links: NavLink[];
 };
 
+/**
+ * Lightweight enterprise areas:
+ * - Workspace  → day-to-day work (tasks, studio, AI)
+ * - CRM        → existing customers / delivery data
+ * - CRM Leads  → leads / outreach (strictly separate)
+ * - Inbox      → mail / channels
+ */
 export const OS_AREAS: OsArea[] = [
   {
-    id: 'aufgaben',
-    label: 'Aufgaben',
-    icon: ListTodoIcon,
-    href: '/',
-    match: ['/', '/aufgaben', '/kunden', '/projekte', '/monatsberichte'],
+    id: 'crm-bestand',
+    label: 'CRM',
+    shortLabel: 'CRM',
+    icon: BriefcaseIcon,
+    href: '/kunden',
+    match: ['/kunden', '/projekte', '/monatsberichte'],
     links: [
-      { href: '/', label: 'Heute', icon: CalendarDaysIcon },
-      { href: '/aufgaben', label: 'Aufgaben', icon: ListTodoIcon },
       { href: '/kunden', label: 'Kunden', icon: UsersIcon },
       { href: '/projekte', label: 'Projekte', icon: FolderIcon },
       { href: '/monatsberichte', label: 'Monatsberichte', icon: FileBarChartIcon },
     ],
   },
   {
-    id: 'studio',
-    label: 'Studio',
-    icon: ClapperboardIcon,
-    href: '/studio',
-    match: ['/studio', '/ai'],
-    links: [
-      { href: '/studio', label: 'Studio', icon: ClapperboardIcon },
-      { href: '/ai', label: 'AI', icon: SparklesIcon },
-    ],
-  },
-  {
-    id: 'leads',
-    label: 'Leads',
-    icon: CrosshairIcon,
+    id: 'crm-akquise',
+    label: 'CRM Leads',
+    shortLabel: 'CRM Leads',
+    icon: TargetIcon,
     href: '/leads/dashboard',
     match: ['/leads'],
     links: [
@@ -78,13 +87,28 @@ export const OS_AREAS: OsArea[] = [
     ],
   },
   {
-    id: 'mail',
-    label: 'E-Mail',
-    icon: MailIcon,
-    href: '/mail',
-    match: ['/mail'],
+    id: 'workspace',
+    label: 'Workspace',
+    shortLabel: 'Workspace',
+    icon: LayoutPanelLeftIcon,
+    href: '/',
+    match: ['/', '/aufgaben', '/studio', '/ai'],
     links: [
-      { href: '/mail', label: 'Postfach', icon: InboxIcon },
+      { href: '/', label: 'Heute', icon: CalendarDaysIcon },
+      { href: '/aufgaben', label: 'Aufgaben', icon: ListTodoIcon },
+      { href: '/studio', label: 'Studio', icon: ClapperboardIcon },
+      { href: '/ai', label: 'AI', icon: SparklesIcon },
+    ],
+  },
+  {
+    id: 'kanaele',
+    label: 'Inbox',
+    shortLabel: 'Inbox',
+    icon: RadioIcon,
+    href: '/mail',
+    match: ['/mail', '/einstellungen'],
+    links: [
+      { href: '/mail', label: 'E-Mail', icon: MailIcon },
       { href: '/mail/konten', label: 'Konten', icon: Settings2Icon },
     ],
   },
@@ -101,7 +125,8 @@ export function getAreaForPath(path: string): OsArea {
     return { area, score: hit ? hit.length : -1 };
   }).sort((a, b) => b.score - a.score);
 
-  return scored[0]!.score >= 0 ? scored[0]!.area : OS_AREAS[0]!;
+  if (scored[0]!.score >= 0) return scored[0]!.area;
+  return OS_AREAS.find((a) => a.id === 'workspace') ?? OS_AREAS[0]!;
 }
 
 export function isLinkActive(path: string, href: string) {
@@ -109,6 +134,10 @@ export function isLinkActive(path: string, href: string) {
   if (path === href) return true;
   // Detail-Routen unter einem Sidebar-Punkt (z. B. /ai/[id])
   if (href === '/ai' && path.startsWith('/ai/')) return true;
+  // E-Mail-Kanal: Postfach inkl. tieferer Routes, aber nicht /mail/konten
+  if (href === '/mail') {
+    return path === '/mail' || (path.startsWith('/mail/') && !path.startsWith('/mail/konten'));
+  }
   return false;
 }
 

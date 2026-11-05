@@ -1,12 +1,12 @@
 'use client';
 
-import { PageContainer } from '@/components/page-container';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { MailApp } from '@/components/mail/mail-app';
 
 export default function MailPage() {
   return (
-    <PageContainer fill>
+    <DashboardShell title="E-Mail" fullHeight>
       <MailApp />
-    </PageContainer>
+    </DashboardShell>
   );
 }

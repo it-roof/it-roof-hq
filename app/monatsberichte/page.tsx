@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { TimeEntryRow } from '@/components/time-entry-row';
 import { useTimer } from '@/lib/timer-context';
 import { type TimeEntry, fmtHms } from '@/lib/time-entry-utils';
@@ -126,11 +125,10 @@ export default function MonatsberichtePage() {
   const summary = data?.summary;
 
   return (
-    <PageContainer>
-      <PageHeader
-        title="Monatsberichte"
-        subtitle="Zeiterfassung nach Projekt"
-        actions={
+    <DashboardShell title="Monatsberichte">
+      <div className="px-4 lg:px-6">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Zeiterfassung nach Projekt</p>
           <div className="flex items-center gap-1">
             <Button
               type="button"
@@ -156,80 +154,80 @@ export default function MonatsberichtePage() {
               <ChevronRightIcon className="size-4" />
             </Button>
           </div>
-        }
-      />
-
-      {loading ? (
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-12 w-full rounded-lg" />
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 w-full rounded-lg" />
-          ))}
         </div>
-      ) : !data || !summary ? (
-        <p className="py-4 text-sm text-muted-foreground">Bericht konnte nicht geladen werden.</p>
-      ) : (
-        <>
-          <div className="mb-6 flex flex-wrap gap-x-5 gap-y-1 border-b border-border/60 pb-4 font-mono text-[12px] tracking-wide text-muted-foreground">
-            <span>
-              <span className="text-foreground">{fmtHms(summary.total_seconds)}</span>
-              {' '}gesamt
-            </span>
-            <span>
-              <span className="text-foreground">{summary.entry_count}</span>
-              {' '}Einträge
-            </span>
-            <span>
-              <span className="text-foreground">{summary.project_count}</span>
-              {' '}Projekte
-            </span>
-          </div>
 
-          {data.projects.length === 0 ? (
-            <p className="py-4 text-sm text-muted-foreground">
-              Keine Zeiteinträge in {monthLabel(month)}.
-            </p>
-          ) : (
-            <div className="flex flex-col gap-8">
-              {data.projects.map((p) => (
-                <section key={p.project_id}>
-                  <div className="mb-3 flex items-baseline justify-between gap-3">
-                    <div className="min-w-0">
-                      <h2 className="truncate text-sm font-semibold tracking-tight">{p.name}</h2>
-                      {p.firma ? (
-                        <p className="mt-0.5 font-mono text-[11px] tracking-wide text-muted-foreground">
-                          {p.firma}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground">
-                      {fmtHms(p.total_seconds)}
-                    </span>
-                  </div>
-                  <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
-                    <div className="divide-y divide-border/60 bg-card">
-                      {p.entries.map((entry) => (
-                        <TimeEntryRow
-                          key={entry.id}
-                          entry={entry}
-                          projects={projects}
-                          running={activeEntryId === entry.id}
-                          showDate
-                          onPatched={onPatched}
-                          onSplitDone={onPatched}
-                          onPlay={playEntry}
-                          onStop={stopRunning}
-                          onDelete={deleteEntry}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </section>
-              ))}
+        {loading ? (
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-12 w-full rounded-lg" />
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : !data || !summary ? (
+          <p className="py-4 text-sm text-muted-foreground">Bericht konnte nicht geladen werden.</p>
+        ) : (
+          <>
+            <div className="mb-6 flex flex-wrap gap-x-5 gap-y-1 border-b border-border/60 pb-4 font-mono text-[12px] tracking-wide text-muted-foreground">
+              <span>
+                <span className="text-foreground">{fmtHms(summary.total_seconds)}</span>
+                {' '}gesamt
+              </span>
+              <span>
+                <span className="text-foreground">{summary.entry_count}</span>
+                {' '}Einträge
+              </span>
+              <span>
+                <span className="text-foreground">{summary.project_count}</span>
+                {' '}Projekte
+              </span>
             </div>
-          )}
-        </>
-      )}
-    </PageContainer>
+
+            {data.projects.length === 0 ? (
+              <p className="py-4 text-sm text-muted-foreground">
+                Keine Zeiteinträge in {monthLabel(month)}.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-8">
+                {data.projects.map((p) => (
+                  <section key={p.project_id}>
+                    <div className="mb-3 flex items-baseline justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="truncate text-sm font-semibold tracking-tight">{p.name}</h2>
+                        {p.firma ? (
+                          <p className="mt-0.5 font-mono text-[11px] tracking-wide text-muted-foreground">
+                            {p.firma}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span className="shrink-0 font-mono text-[12px] tabular-nums text-muted-foreground">
+                        {fmtHms(p.total_seconds)}
+                      </span>
+                    </div>
+                    <div className="overflow-hidden rounded-xl ring-1 ring-foreground/10">
+                      <div className="divide-y divide-border/60 bg-card">
+                        {p.entries.map((entry) => (
+                          <TimeEntryRow
+                            key={entry.id}
+                            entry={entry}
+                            projects={projects}
+                            running={activeEntryId === entry.id}
+                            showDate
+                            onPatched={onPatched}
+                            onSplitDone={onPatched}
+                            onPlay={playEntry}
+                            onStop={stopRunning}
+                            onDelete={deleteEntry}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </DashboardShell>
   );
 }

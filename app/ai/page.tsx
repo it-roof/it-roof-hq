@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AiProviderSheet, type AiProvider } from '@/components/ai-provider-sheet';
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { PlugIcon, PlusIcon, SparklesIcon } from 'lucide-react';
 
 type Conversation = {
@@ -52,36 +51,34 @@ export default function AiPage() {
   const enabledCount = providers.filter((p) => p.enabled).length;
 
   return (
-    <PageContainer>
-        <PageHeader
-          title="AI"
-          subtitle={
-            enabledCount === 0
+    <DashboardShell title="AI">
+      <div className="px-4 lg:px-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {enabledCount === 0
               ? 'Keine API angedockt'
-              : `${enabledCount} API${enabledCount === 1 ? '' : 's'} · ${conversations.length} Chats`
-          }
-          actions={(
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-10 text-muted-foreground hover:text-foreground"
-                onClick={() => setSheetOpen(true)}
-                aria-label="APIs verwalten"
-              >
-                <PlugIcon className="size-4" />
-              </Button>
-              <Button
-                size="icon"
-                onClick={newChat}
-                className="size-10 rounded-full"
-                aria-label="Neuer Chat"
-              >
-                <PlusIcon className="size-4" />
-              </Button>
-            </div>
-          )}
-        />
+              : `${enabledCount} API${enabledCount === 1 ? '' : 's'} · ${conversations.length} Chats`}
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-10 text-muted-foreground hover:text-foreground"
+              onClick={() => setSheetOpen(true)}
+              aria-label="APIs verwalten"
+            >
+              <PlugIcon className="size-4" />
+            </Button>
+            <Button
+              size="icon"
+              onClick={newChat}
+              className="size-10 rounded-full"
+              aria-label="Neuer Chat"
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          </div>
+        </div>
 
         {loading ? (
           <div className="flex flex-col gap-3">
@@ -90,11 +87,11 @@ export default function AiPage() {
             ))}
           </div>
         ) : conversations.length === 0 ? (
-          <div className="pt-10 flex flex-col items-center text-center gap-3">
-            <div className="size-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 pt-10 text-center">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <SparklesIcon className="size-5" />
             </div>
-            <p className="text-sm text-muted-foreground max-w-[260px]">
+            <p className="max-w-[260px] text-sm text-muted-foreground">
               {enabledCount === 0
                 ? 'Dock zuerst eine AI-API an — danach kannst du hier chatten.'
                 : 'Noch keine Chats. Starte ein Fenster und frag los.'}
@@ -116,15 +113,15 @@ export default function AiPage() {
                 key={c.id}
                 type="button"
                 onClick={() => router.push(`/ai/${c.id}`)}
-                className="w-full text-left py-4 flex flex-col gap-0.5 hover:opacity-80 transition-opacity"
+                className="flex w-full flex-col gap-0.5 py-4 text-left transition-opacity hover:opacity-80"
               >
                 <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-sm font-semibold tracking-tight truncate">{c.title}</p>
-                  <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
+                  <p className="truncate text-sm font-semibold tracking-tight">{c.title}</p>
+                  <span className="flex-shrink-0 font-mono text-[10px] text-muted-foreground">
                     {formatWhen(c.updatedAt)}
                   </span>
                 </div>
-                <p className="text-[11px] font-mono text-muted-foreground truncate tracking-wide">
+                <p className="truncate font-mono text-[11px] tracking-wide text-muted-foreground">
                   {c.providerName ? `${c.providerName} · ` : ''}
                   {c.preview?.replace(/\s+/g, ' ') || 'Leerer Chat'}
                 </p>
@@ -132,13 +129,14 @@ export default function AiPage() {
             ))}
           </div>
         )}
+      </div>
 
       <AiProviderSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         onChanged={load}
       />
-    </PageContainer>
+    </DashboardShell>
   );
 }
 

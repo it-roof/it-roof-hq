@@ -1,17 +1,10 @@
 'use client';
 
-import { ThemeProvider as NextThemesProvider } from 'next-themes';
-
+/**
+ * Light-only shell. next-themes injects a <script> that Next.js 16 / React 19
+ * rejects on the client ("Encountered a script tag while rendering…").
+ * Until dark mode is needed, skip next-themes entirely.
+ */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <NextThemesProvider
-      attribute="class"
-      defaultTheme="light"
-      forcedTheme="light"
-      enableSystem={false}
-      storageKey="pinguinos-theme"
-    >
-      {children}
-    </NextThemesProvider>
-  );
+  return <>{children}</>;
 }

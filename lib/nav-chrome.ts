@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 export const chromeSurface =
   'bg-sidebar text-sidebar-foreground border-sidebar-border';
 
-/** Segmented area switcher (Aufgaben / Studio / Leads) */
+/** Segmented area switcher (Workspace / CRM / CRM Leads / Inbox) */
 export function areaSwitchTrackClassName() {
   return 'flex items-center gap-0.5 rounded-lg bg-sidebar-accent/60 p-[3px]';
 }

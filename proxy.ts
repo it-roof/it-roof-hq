@@ -20,6 +20,7 @@ function isPublicPath(pathname: string) {
   if (pathname.startsWith('/api/auth')) return true;
   if (pathname === '/login') return true;
   if (pathname === '/login/reset' || pathname.startsWith('/login/reset/')) return true;
+  if (pathname === '/demo' || pathname.startsWith('/demo/')) return true;
   if (pathname.startsWith('/_next')) return true;
   if (pathname.startsWith('/favicon')) return true;
   if (pathname === '/manifest.webmanifest') return true;

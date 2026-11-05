@@ -2,14 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageHeader } from '@/components/page-header';
-import { PageContainer } from '@/components/page-container';
+import { Button } from '@/components/ui/button';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { WeekStrip } from '@/components/week-strip';
 import { TaskSection } from '@/components/task-section';
 import { DoneAccordion } from '@/components/done-accordion';
 import NewTaskSheet from '@/components/new-task-sheet';
 import { type Task } from '@/lib/types';
 import { useTaskMutations } from '@/lib/use-task-mutations';
+import { PlusIcon } from 'lucide-react';
 
 const now = new Date();
 const today = now.toISOString().slice(0, 10);
@@ -53,15 +54,24 @@ export default function Home() {
   })();
 
   return (
-    <PageContainer>
-        <PageHeader
-          title="Heute"
-          subtitle={now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
-          onAdd={() => { setSheetDate(today); setSheetOpen(true); }}
-        />
+    <DashboardShell title="Heute">
+      <div className="px-4 lg:px-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+          <Button
+            size="icon"
+            className="size-9 rounded-full"
+            onClick={() => { setSheetDate(today); setSheetOpen(true); }}
+            aria-label="Neue Aufgabe"
+          >
+            <PlusIcon className="size-4" />
+          </Button>
+        </div>
 
         {loading ? (
-          <div className="flex flex-col gap-3 mt-4">
+          <div className="mt-4 flex flex-col gap-3">
             {[80, 60, 70].map(w => (
               <Skeleton key={w} className="h-10 rounded-xl" style={{ width: `${w}%` }} />
             ))}
@@ -93,6 +103,7 @@ export default function Home() {
             <DoneAccordion onReopen={reopenTask} />
           </>
         )}
+      </div>
 
       <NewTaskSheet
         open={sheetOpen}
@@ -100,6 +111,6 @@ export default function Home() {
         onClose={() => setSheetOpen(false)}
         onCreated={load}
       />
-    </PageContainer>
+    </DashboardShell>
   );
 }

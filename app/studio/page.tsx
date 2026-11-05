@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { cn } from '@/lib/utils';
 import {
   DEFAULT_IMAGE_SIZE,
@@ -283,14 +284,12 @@ export default function StudioPage() {
   }
 
   return (
+    <DashboardShell title="Studio" fullHeight>
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3 border-b px-4 pt-6 pb-4 md:px-8">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Studio</h1>
-          <p className="mt-1 font-mono text-xs tracking-wide text-muted-foreground">
-            Links beschreiben, rechts Ergebnisse und Warteschlange.
-          </p>
-        </div>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-3 md:px-6">
+        <p className="font-mono text-xs tracking-wide text-muted-foreground">
+          Links beschreiben, rechts Ergebnisse und Warteschlange.
+        </p>
         {stats && (
           <p className="text-sm tabular-nums text-muted-foreground">
             {stats.month}: {formatUsd(stats.spent_cents)} von {formatUsd(stats.budget_cents)}
@@ -622,5 +621,6 @@ export default function StudioPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </DashboardShell>
   );
 }

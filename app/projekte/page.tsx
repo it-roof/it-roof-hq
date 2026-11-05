@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
 
 type Project = { id: string; name: string; company_id: string | null; firma: string | null };
 
@@ -33,11 +32,11 @@ export default function ProjektePage() {
   }, {});
 
   return (
-    <PageContainer>
-        <PageHeader
-          title="Projekte"
-          subtitle={`${projects.length} Projekte`}
-        />
+    <DashboardShell title="Projekte">
+      <div className="px-4 lg:px-6">
+        <p className="mb-4 text-sm text-muted-foreground">
+          {projects.length} Projekte
+        </p>
 
         <Input
           value={search}
@@ -51,21 +50,21 @@ export default function ProjektePage() {
             {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 rounded-lg" />)}
           </div>
         ) : Object.keys(grouped).length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">Keine Projekte gefunden.</p>
+          <p className="py-4 text-sm text-muted-foreground">Keine Projekte gefunden.</p>
         ) : (
           <div className="flex flex-col gap-8">
             {Object.entries(grouped)
               .sort(([a], [b]) => a.localeCompare(b, 'de'))
               .map(([firma, ps]) => (
                 <div key={firma}>
-                  <p className="text-[10px] font-mono font-medium text-muted-foreground uppercase tracking-[0.15em] mb-3">
+                  <p className="mb-3 text-[10px] font-mono font-medium uppercase tracking-[0.15em] text-muted-foreground">
                     {firma}
                   </p>
                   <div className="flex flex-col divide-y divide-border/60">
                     {ps.map(p => (
                       <div key={p.id} className="flex items-center justify-between py-3">
                         <p className="text-sm">{p.name}</p>
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                        <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
                       </div>
                     ))}
                   </div>
@@ -73,6 +72,7 @@ export default function ProjektePage() {
               ))}
           </div>
         )}
-    </PageContainer>
+      </div>
+    </DashboardShell>
   );
 }

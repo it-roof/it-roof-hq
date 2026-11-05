@@ -29,10 +29,11 @@ export default function Navbar() {
                 key={a.id}
                 href={a.href}
                 className={areaSwitchItemMobileClassName(active)}
+                title={a.label}
               >
                 <a.icon className="size-4" strokeWidth={active ? 2.5 : 1.5} />
                 <span className="text-[10px] font-mono font-medium leading-none tracking-wide">
-                  {a.label}
+                  {a.shortLabel}
                 </span>
               </Link>
             );

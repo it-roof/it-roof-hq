@@ -78,9 +78,10 @@ export function AppNavbar() {
               key={a.id}
               href={a.href}
               className={areaSwitchItemClassName(active)}
+              title={a.label}
             >
               <a.icon className="size-3.5" strokeWidth={active ? 2.5 : 1.75} />
-              <span className="font-mono tracking-wide">{a.label}</span>
+              <span className="font-mono tracking-wide">{a.shortLabel}</span>
             </Link>
           );
         })}

@@ -4,7 +4,7 @@ import { auth } from '@/auth';
 import { db } from '@/lib/db';
 import { users } from '@/lib/schema';
 import { SecuritySettings } from '@/components/security-settings';
-import { PageContainer } from '@/components/page-container';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 
 export default async function SecurityPage() {
   const session = await auth();
@@ -17,8 +17,10 @@ export default async function SecurityPage() {
     .limit(1);
 
   return (
-    <PageContainer contained="md">
-      <SecuritySettings totpEnabled={Boolean(user?.totpEnabled)} />
-    </PageContainer>
+    <DashboardShell title="Sicherheit">
+      <div className="mx-auto w-full max-w-xl px-4 md:max-w-5xl lg:px-6">
+        <SecuritySettings totpEnabled={Boolean(user?.totpEnabled)} />
+      </div>
+    </DashboardShell>
   );
 }

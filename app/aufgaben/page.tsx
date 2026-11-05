@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PageHeader } from '@/components/page-header';
-import { PageContainer } from '@/components/page-container';
+import { Button } from '@/components/ui/button';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { ProjektGroup } from '@/components/projekt-group';
 import { TimeTrackingView } from '@/components/time-tracking-view';
 import { DoneAccordion } from '@/components/done-accordion';
@@ -13,7 +13,7 @@ import { type Task } from '@/lib/types';
 import { useTimer } from '@/lib/timer-context';
 import { useTaskMutations } from '@/lib/use-task-mutations';
 import NewTaskSheet from '@/components/new-task-sheet';
-import { ClockIcon, ListTodoIcon } from 'lucide-react';
+import { ClockIcon, ListTodoIcon, PlusIcon } from 'lucide-react';
 
 const PRIO_DE: Record<string, string> = { high: 'Hoch', medium: 'Mittel', low: 'Niedrig' };
 const VIEW_KEY = 'cherry-os-aufgaben-view';
@@ -80,12 +80,21 @@ export default function AufgabenPage() {
   const sharedProps = { onDone: doneTask, onSaveTitle: saveTitle, onDelete: deleteTask };
 
   return (
-    <PageContainer>
-        <PageHeader
-          title="Aufgaben"
-          subtitle={view === 'zeit' ? 'Zeiterfassung' : `${tasks.length} offen`}
-          onAdd={() => setSheetOpen(true)}
-        />
+    <DashboardShell title="Aufgaben">
+      <div className="px-4 lg:px-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            {view === 'zeit' ? 'Zeiterfassung' : `${tasks.length} offen`}
+          </p>
+          <Button
+            size="icon"
+            className="size-9 rounded-full"
+            onClick={() => setSheetOpen(true)}
+            aria-label="Neue Aufgabe"
+          >
+            <PlusIcon className="size-4" />
+          </Button>
+        </div>
 
         <Tabs value={view} onValueChange={changeView} className="mb-5">
           <TabsList className="h-10 w-full max-w-md">
@@ -114,7 +123,7 @@ export default function AufgabenPage() {
             <Input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Suchen…" className="mb-4 h-10" />
 
-            <div className="flex gap-1.5 mb-6 flex-wrap">
+            <div className="mb-6 flex flex-wrap gap-1.5">
               {(['all', 'high', 'medium', 'low'] as const).map(p => {
                 const activeClass =
                   p === 'high'   ? 'bg-danger text-danger-foreground border-danger' :
@@ -125,7 +134,7 @@ export default function AufgabenPage() {
                   <button
                     key={p}
                     onClick={() => setActivePrio(p)}
-                    className={`px-3 py-1.5 rounded-full text-[11px] font-mono font-medium tracking-wide transition-all duration-150 border ${
+                    className={`rounded-full border px-3 py-1.5 text-[11px] font-mono font-medium tracking-wide transition-all duration-150 ${
                       activePrio === p
                         ? activeClass
                         : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
@@ -163,8 +172,9 @@ export default function AufgabenPage() {
             )}
           </>
         )}
+      </div>
 
       <NewTaskSheet open={sheetOpen} onClose={() => setSheetOpen(false)} onCreated={load} />
-    </PageContainer>
+    </DashboardShell>
   );
 }

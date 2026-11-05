@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { company, companyContact, contact } from '@/lib/schema';
-import { eq, sql } from 'drizzle-orm';
+import { eq, or, sql } from 'drizzle-orm';
 import { requireSession, unauthorized } from '@/lib/auth/require-session';
 
 export async function GET() {
@@ -29,7 +29,7 @@ export async function GET() {
     .from(company)
     .leftJoin(companyContact, eq(companyContact.companyId, company.id))
     .leftJoin(contact, eq(contact.id, companyContact.contactId))
-    .where(eq(company.status, 'active'))
+    .where(or(eq(company.status, 'active'), eq(company.status, 'Aktiv')))
     .groupBy(company.id)
     .orderBy(company.name);
 

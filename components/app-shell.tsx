@@ -1,13 +1,7 @@
-'use client';
-
-import { usePathname } from 'next/navigation';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { TimerBanner } from '@/components/timer-banner';
-import { AppSidebar } from '@/components/app-sidebar';
-import { AppNavbar } from '@/components/app-navbar';
-import Navbar from '@/components/navbar';
-
+/**
+ * Legacy chrome removed — all app pages use DashboardShell.
+ * Login and every other route pass children through; pages own their chrome.
+ */
 export type ShellUser = {
   name: string | null;
   email: string | null;
@@ -15,29 +9,9 @@ export type ShellUser = {
 
 export function AppShell({
   children,
-  user,
 }: {
   children: React.ReactNode;
   user?: ShellUser | null;
 }) {
-  const path = usePathname();
-  if (path === '/login' || path.startsWith('/login/')) {
-    return <>{children}</>;
-  }
-
-  return (
-    <TooltipProvider>
-      <SidebarProvider className="h-svh min-h-svh overflow-hidden bg-background">
-        <AppSidebar user={user ?? null} />
-        <SidebarInset className="min-h-0 overflow-hidden bg-background">
-          <AppNavbar />
-          <TimerBanner />
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {children}
-          </div>
-          <Navbar />
-        </SidebarInset>
-      </SidebarProvider>
-    </TooltipProvider>
-  );
+  return <>{children}</>;
 }

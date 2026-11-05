@@ -1,14 +1,15 @@
 'use client';
 
-import { PageContainer } from '@/components/page-container';
-import { PageHeader } from '@/components/page-header';
+import { DashboardShell } from '@/components/demo/dashboard-shell';
 import { ContactsTab } from '@/components/leads/contacts-tab';
 
 export default function LeadsKontaktePage() {
   return (
-    <PageContainer>
-      <PageHeader title="Kontakte" subtitle="lead_contact · CRUD" />
-      <ContactsTab />
-    </PageContainer>
+    <DashboardShell title="Kontakte">
+      <div className="px-4 lg:px-6">
+        <p className="mb-4 text-sm text-muted-foreground">lead_contact · CRUD</p>
+        <ContactsTab />
+      </div>
+    </DashboardShell>
   );
 }
