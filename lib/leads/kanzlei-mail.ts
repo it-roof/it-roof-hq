@@ -42,6 +42,14 @@ export function splitPersonName(value: unknown): { firstName: string | null; las
   return { firstName: parts[0] ?? null, lastName: parts.slice(1).join(' ') };
 }
 
+export function hasLeadLocator(body: Record<string, unknown>) {
+  return !!(
+    emptyToNull(body.lead_id ?? body.leadId)
+    || emptyToNull(body.company_name ?? body.companyName)
+    || emptyToNull(body.domain ?? body.website)
+  );
+}
+
 export function personNameFromBody(body: Record<string, unknown>) {
   const first = emptyToNull(body.first_name ?? body.firstName);
   const last = emptyToNull(body.last_name ?? body.lastName);

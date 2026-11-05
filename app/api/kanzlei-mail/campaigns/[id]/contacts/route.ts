@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireKanzleiMailToken } from '@/lib/auth/require-kanzlei-mail-token';
+import { botCatchResponse } from '@/lib/leads/bot-error';
 import { resolveCampaignId } from '@/lib/leads/campaign-channel';
 import { getLeadsDb } from '@/lib/leads/db';
 import { EMAIL_CAMPAIGN_NAME, isMailStatus, parseMailStatus } from '@/lib/leads/mail-status';
@@ -16,10 +17,9 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   try {
     const db = getLeadsDb();
-    const camp = await resolveCampaignId(db, id);
-    if (!camp) return NextResponse.json({ error: 'Kampagne nicht gefunden' }, { status: 404 });
-    if (camp.channel !== 'email' || camp.name !== EMAIL_CAMPAIGN_NAME) {
-      return NextResponse.json({ error: 'Kampagne ist keine Kanzlei-Mail-Kampagne' }, { status: 400 });
+    const camp = await resolveCampaignId(db, id, 'email');
+    if (!camp || camp.name !== EMAIL_CAMPAIGN_NAME) {
+      return NextResponse.json({ error: 'Kampagne nicht gefunden' }, { status: 404 });
     }
 
     const rawStatus = req.nextUrl.searchParams.get('status');
@@ -35,6 +35,6 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       meta: { returned: contacts.length },
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Fehler' }, { status: 400 });
+    return botCatchResponse(e, 'kanzlei-mail.campaigns.contacts');
   }
 }

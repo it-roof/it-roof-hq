@@ -140,13 +140,16 @@ export async function findContactByLinkedIn(db: LeadsDb, linkedin: unknown) {
   return row ?? null;
 }
 
+/** Gleicher Ausdruck wie Index lead_contact_email_norm_idx. */
+export const emailNormSql = sql`lower(trim(${leadContact.email}))`;
+
 export async function findContactByEmail(db: LeadsDb, email: unknown) {
   const norm = normalizeEmail(typeof email === 'string' ? email : String(email ?? ''));
   if (!norm) return null;
   const [row] = await db
     .select()
     .from(leadContact)
-    .where(sql`lower(btrim(coalesce(${leadContact.email}, ''))) = ${norm}`)
+    .where(sql`${emailNormSql} = ${norm}`)
     .limit(1);
   return row ?? null;
 }
@@ -301,6 +304,34 @@ export function fillLeadNulls(
   return updates;
 }
 
+export function fillContactNulls(
+  current: typeof leadContact.$inferSelect,
+  next: Partial<typeof leadContact.$inferInsert>,
+) {
+  const updates: Partial<typeof leadContact.$inferInsert> = {};
+  const take = <K extends keyof typeof leadContact.$inferSelect>(
+    col: K,
+    insertKey: keyof typeof leadContact.$inferInsert,
+    value: unknown,
+  ) => {
+    if (value === undefined) return;
+    const cur = current[col];
+    if (cur == null || cur === '') {
+      (updates as Record<string, unknown>)[insertKey as string] = value;
+    }
+  };
+  take('salutation', 'salutation', next.salutation);
+  take('firstName', 'firstName', next.firstName);
+  take('lastName', 'lastName', next.lastName);
+  take('position', 'position', next.position);
+  take('phone', 'phone', next.phone);
+  take('linkedinUrl', 'linkedinUrl', next.linkedinUrl);
+  if ((current.email == null || current.email === '') && next.email) {
+    updates.email = next.email;
+  }
+  return updates;
+}
+
 export function contactFieldsFromBody(body: Record<string, unknown>) {
   const updates: Partial<typeof leadContact.$inferInsert> = {};
   if (body.salutation !== undefined) updates.salutation = emptyToNull(body.salutation);
@@ -323,9 +354,12 @@ export function contactFieldsFromBody(body: Record<string, unknown>) {
   return updates;
 }
 
-export function campaignContactFieldsFromBody(body: Record<string, unknown>) {
+export function campaignContactFieldsFromBody(
+  body: Record<string, unknown>,
+  parseStatus: (value: unknown) => string = parseCampaignContactStatus,
+) {
   const updates: Partial<typeof campaignContact.$inferInsert> = {};
-  if (body.status !== undefined) updates.status = parseCampaignContactStatus(body.status);
+  if (body.status !== undefined) updates.status = parseStatus(body.status);
   if (body.notes !== undefined) updates.notes = emptyToNull(body.notes);
   if (body.next_step !== undefined || body.nextStep !== undefined) {
     updates.nextStep = emptyToNull(body.next_step ?? body.nextStep);

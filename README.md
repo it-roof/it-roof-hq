@@ -117,7 +117,7 @@ Prüfung: `scripts/leads-scout-verify.sql`.
 
 ## Kanzlei-Mail-API (E-Mail-Akquise)
 
-Zweiter interner Bot unter `/api/kanzlei-mail/*` (eigener Präfix neben `/api/scout/*` und neben der session-geschützten SMTP-Route `/api/mail/*`). Auth: `Authorization: Bearer <token>`. Hash in `KANZLEI_MAIL_API_TOKEN_SHA256`. Scout-Token gilt hier nicht, dieser Token nicht auf `/api/scout/*`. Kein Mailversand über diesen Token.
+Zweiter interner Bot unter `/api/kanzlei-mail/*` (eigener Präfix neben `/api/scout/*` und neben der session-geschützten SMTP-Route `/api/mail/*`). Auth: `Authorization: Bearer <token>`. Hash in `KANZLEI_MAIL_API_TOKEN_SHA256`. Scout-Token gilt hier nicht, dieser Token nicht auf `/api/scout/*`. Kein Mailversand über diesen Token. Scout-Kampagnenrouten nur `channel=linkedin`/`li_*`, diese API nur `channel=email`/`mail_*` (fremde Kampagne 404).
 
 SQL (manuell, nach `leads-scout.sql`): `scripts/leads-kanzlei-mail.sql`. Prüfung: `scripts/leads-kanzlei-mail-verify.sql`.
 
@@ -129,7 +129,7 @@ Kampagne **E-Mail KI-Schulung Kanzleien** (`channel = email`, Slug `email-ki-sch
 |---|---|---|
 | GET | `/api/kanzlei-mail/leads/lookup?domain=` oder `company_name=` | Kanzlei + Kontakte + `email_outreach_blocked` + Scout-/LinkedIn-Flags |
 | POST | `/api/kanzlei-mail/leads` | Upsert Kanzlei (Domain, sonst Firmen-Key; nur NULL-Felder; setzt `email_outreach_blocked` nicht) |
-| POST | `/api/kanzlei-mail/contacts` | Person am bestehenden Lead (`name`/`rolle`/`email`; 409 wenn E-Mail an anderem Lead) |
+| POST | `/api/kanzlei-mail/contacts` | Person am bestehenden Lead (nur NULL-Felder, E-Mail nie ersetzen; 409 wenn E-Mail an anderem Lead) |
 | GET | `/api/kanzlei-mail/campaigns/{id\|email-ki-schulung-kanzleien}/contacts?status=` | Kampagnenkontakte |
 | PUT | `/api/kanzlei-mail/campaigns/{id\|email-ki-schulung-kanzleien}/contacts/{contactId}` | Status/Entwurf; 409 wenn Lead gesperrt |
 

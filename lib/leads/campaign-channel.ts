@@ -58,37 +58,62 @@ export function isUuid(value: string) {
   return UUID_RE.test(value);
 }
 
+export type BotCampaignScope = 'linkedin' | 'email';
+
+export function campaignSlugScope(idOrSlug: string): BotCampaignScope | 'uuid' | null {
+  const raw = idOrSlug.trim();
+  if (!raw) return null;
+  if (isUuid(raw)) return 'uuid';
+  if (raw === LINKEDIN_CAMPAIGN_SLUG) return 'linkedin';
+  if (raw === EMAIL_CAMPAIGN_SLUG) return 'email';
+  return null;
+}
+
+export function isCampaignInScope(
+  camp: { channel?: string | null } | null | undefined,
+  scope: BotCampaignScope,
+) {
+  return !!camp && camp.channel === scope;
+}
+
 export async function resolveCampaignId(
   db: ReturnType<typeof getLeadsDb>,
   idOrSlug: string,
+  scope?: BotCampaignScope,
 ) {
   const raw = idOrSlug.trim();
   if (!raw) return null;
-  if (isUuid(raw)) {
-    const [row] = await db
-      .select({ id: campaign.id, channel: campaign.channel, name: campaign.name })
-      .from(campaign)
-      .where(eq(campaign.id, raw))
-      .limit(1);
-    return row ?? null;
-  }
-  if (raw === LINKEDIN_CAMPAIGN_SLUG) {
+
+  const slugScope = campaignSlugScope(raw);
+  if (slugScope === 'linkedin') {
+    if (scope && scope !== 'linkedin') return null;
     const [row] = await db
       .select({ id: campaign.id, channel: campaign.channel, name: campaign.name })
       .from(campaign)
       .where(inArray(campaign.name, [LINKEDIN_CAMPAIGN_NAME, LINKEDIN_CAMPAIGN_NAME_LEGACY]))
       .limit(1);
-    return row ?? null;
+    if (!row || (scope && row.channel !== scope)) return null;
+    return row;
   }
-  if (raw === EMAIL_CAMPAIGN_SLUG) {
+  if (slugScope === 'email') {
+    if (scope && scope !== 'email') return null;
     const [row] = await db
       .select({ id: campaign.id, channel: campaign.channel, name: campaign.name })
       .from(campaign)
       .where(eq(campaign.name, EMAIL_CAMPAIGN_NAME))
       .limit(1);
-    return row ?? null;
+    if (!row || (scope && row.channel !== scope)) return null;
+    return row;
   }
-  return null;
+  if (slugScope !== 'uuid') return null;
+
+  const [row] = await db
+    .select({ id: campaign.id, channel: campaign.channel, name: campaign.name })
+    .from(campaign)
+    .where(eq(campaign.id, raw))
+    .limit(1);
+  if (!row || (scope && row.channel !== scope)) return null;
+  return row;
 }
 
 export async function assertEmailCampaign(

@@ -5,22 +5,32 @@ import { tokenMatches } from '../lib/auth/require-bearer-token.ts';
 import { requireKanzleiMailToken } from '../lib/auth/require-kanzlei-mail-token.ts';
 import { requireScoutToken } from '../lib/auth/require-scout-token.ts';
 import { hasBearerToken, isKanzleiMailApiPath, isScoutApiPath } from '../lib/auth/scout-path.ts';
+import { botCatchResponse, pgErrorCode } from '../lib/leads/bot-error.ts';
 import {
   assertStatusMatchesChannel,
+  campaignSlugScope,
   isCampaignContactStatus,
+  isCampaignInScope,
   parseCampaignContactStatus,
 } from '../lib/leads/campaign-channel.ts';
 import {
   contactEmailConflict,
   domainTakenConflict,
   emailOutreachBlockedConflict,
+  hasLeadLocator,
   lookupContactFlags,
   personNameFromBody,
   pickLeadMatch,
   splitPersonName,
 } from '../lib/leads/kanzlei-mail.ts';
+import { parseLinkedInStatus } from '../lib/leads/linkedin-status.ts';
 import { EMAIL_CAMPAIGN_NAME, EMAIL_CAMPAIGN_SLUG, isMailStatus, parseMailStatus, usesCampaignLead } from '../lib/leads/mail-status.ts';
-import { fillLeadNulls, leadFieldsFromBody } from '../lib/leads/scout-queries.ts';
+import {
+  campaignContactFieldsFromBody,
+  fillContactNulls,
+  fillLeadNulls,
+  leadFieldsFromBody,
+} from '../lib/leads/scout-queries.ts';
 import { normalizeDomain } from '../lib/leads/normalize.ts';
 import { normalizeEmail } from '../lib/leads/email-check.ts';
 
@@ -139,6 +149,10 @@ assert(splitPersonName('Ada Beispiel').firstName === 'Ada', 'split first');
 assert(splitPersonName('Ada Beispiel').lastName === 'Beispiel', 'split last');
 assert(personNameFromBody({ name: 'Ada Beispiel' }).lastName === 'Beispiel', 'name field');
 assert(personNameFromBody({ first_name: 'Ada', last_name: 'Beispiel' }).firstName === 'Ada', 'first last win');
+assert(hasLeadLocator({ name: 'Ada Beispiel', email: 'ada@nordlicht.example' }) === false, 'contacts without lead ref');
+assert(hasLeadLocator({ company_name: 'Nordlicht Kanzlei' }) === true, 'contacts with company');
+assert(hasLeadLocator({ domain: 'nordlicht.example' }) === true, 'contacts with domain');
+assert(hasLeadLocator({ lead_id: '11111111-1111-4111-8111-111111111111' }) === true, 'contacts with lead_id');
 
 assert(isMailStatus('mail_neu') === true, 'mail_neu');
 assert(isMailStatus('li_shortlist') === false, 'li not mail');
@@ -164,6 +178,98 @@ try {
 assert(threw, 'mail_* on linkedin campaign rejected');
 assertStatusMatchesChannel('mail_neu', 'email');
 assertStatusMatchesChannel('li_shortlist', 'linkedin');
+
+assert(campaignSlugScope('linkedin-ki-schulung') === 'linkedin', 'linkedin slug scope');
+assert(campaignSlugScope('email-ki-schulung-kanzleien') === 'email', 'email slug scope');
+assert(campaignSlugScope('11111111-1111-4111-8111-111111111111') === 'uuid', 'uuid scope');
+assert(isCampaignInScope({ channel: 'linkedin' }, 'linkedin') === true, 'linkedin in scout scope');
+assert(isCampaignInScope({ channel: 'email' }, 'linkedin') === false, 'email out of scout scope');
+assert(isCampaignInScope({ channel: 'email' }, 'email') === true, 'email in mail scope');
+assert(isCampaignInScope({ channel: 'linkedin' }, 'email') === false, 'linkedin out of mail scope');
+
+threw = false;
+try {
+  parseLinkedInStatus('mail_entwurf');
+} catch {
+  threw = true;
+}
+assert(threw, 'scout status parser rejects mail_*');
+threw = false;
+try {
+  parseMailStatus('li_shortlist');
+} catch {
+  threw = true;
+}
+assert(threw, 'mail status parser rejects li_*');
+threw = false;
+try {
+  campaignContactFieldsFromBody({ status: 'mail_entwurf' }, parseLinkedInStatus);
+} catch {
+  threw = true;
+}
+assert(threw, 'scout campaign body rejects mail_*');
+threw = false;
+try {
+  campaignContactFieldsFromBody({ status: 'li_vernetzt' }, parseMailStatus);
+} catch {
+  threw = true;
+}
+assert(threw, 'mail campaign body rejects li_*');
+assert(
+  campaignContactFieldsFromBody({ status: 'li_shortlist' }, parseLinkedInStatus).status === 'li_shortlist',
+  'scout body accepts li_*',
+);
+assert(
+  campaignContactFieldsFromBody({ status: 'mail_entwurf' }, parseMailStatus).status === 'mail_entwurf',
+  'mail body accepts mail_*',
+);
+
+const contactCurrent = {
+  id: '22222222-2222-4222-8222-222222222222',
+  leadId: '11111111-1111-4111-8111-111111111111',
+  salutation: null,
+  firstName: 'Ada',
+  lastName: 'Beispiel',
+  position: 'Partnerin',
+  email: 'ada@nordlicht.example',
+  phone: null,
+  linkedinUrl: 'https://linkedin.com/in/ada-beispiel',
+  createdAt: null,
+  updatedAt: null,
+};
+const contactFilled = fillContactNulls(contactCurrent, {
+  firstName: 'Andere',
+  lastName: 'Person',
+  position: 'Associate',
+  email: 'neu@nordlicht.example',
+  phone: '0951 0000',
+  linkedinUrl: 'https://linkedin.com/in/andere',
+});
+assert(contactFilled.firstName === undefined, 'contact null-only keeps first name');
+assert(contactFilled.lastName === undefined, 'contact null-only keeps last name');
+assert(contactFilled.position === undefined, 'contact null-only keeps position');
+assert(contactFilled.email === undefined, 'contact never replaces email');
+assert(contactFilled.linkedinUrl === undefined, 'contact null-only keeps linkedin');
+assert(contactFilled.phone === '0951 0000', 'contact null-only fills phone');
+
+const nameless = { ...contactCurrent, email: null, phone: '', firstName: 'Ada' };
+const nameMatchFill = fillContactNulls(nameless, { email: 'ada@nordlicht.example', firstName: 'Andere' });
+assert(nameMatchFill.email === 'ada@nordlicht.example', 'contact fills empty email');
+assert(nameMatchFill.firstName === undefined, 'name match keeps first name');
+
+assert(pgErrorCode({ code: '23505' }) === '23505', 'pg unique code');
+assert(pgErrorCode({ cause: { code: 'P0001' } }) === 'P0001', 'pg trigger code');
+const uniqueRes = botCatchResponse(Object.assign(new Error('duplicate key value (ada@x)'), { code: '23505' }), 'test');
+assert(uniqueRes.status === 409, 'unique maps 409');
+const uniqueBody = await uniqueRes.json();
+assert(uniqueBody.error === 'Konflikt', 'unique generic message');
+assert(!String(uniqueBody.error).includes('ada@'), 'no raw db text');
+const triggerRes = botCatchResponse(Object.assign(new Error('linkedin-Kampagne erlaubt nur li_* Status'), { code: 'P0001' }), 'test');
+assert(triggerRes.status === 400, 'trigger maps 400');
+assert((await triggerRes.json()).error === 'Ungültige Daten', 'trigger generic message');
+const validationRes = botCatchResponse(new Error('status erforderlich'), 'test');
+assert(validationRes.status === 400, 'validation stays 400');
+assert((await validationRes.json()).error === 'status erforderlich', 'validation message kept');
 
 assert(EMAIL_CAMPAIGN_NAME === 'E-Mail KI-Schulung Kanzleien', 'campaign name');
 assert(EMAIL_CAMPAIGN_SLUG === 'email-ki-schulung-kanzleien', 'campaign slug');

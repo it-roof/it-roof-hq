@@ -1,15 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { requireKanzleiMailToken } from '@/lib/auth/require-kanzlei-mail-token';
-import {
-  assertStatusMatchesChannel,
-  isUuid,
-  resolveCampaignId,
-} from '@/lib/leads/campaign-channel';
+import { botCatchResponse } from '@/lib/leads/bot-error';
+import { isUuid, resolveCampaignId } from '@/lib/leads/campaign-channel';
 import { getLeadsDb } from '@/lib/leads/db';
 import { nowIso } from '@/lib/leads/http';
 import { emailOutreachBlockedConflict } from '@/lib/leads/kanzlei-mail';
-import { EMAIL_CAMPAIGN_NAME } from '@/lib/leads/mail-status';
+import { EMAIL_CAMPAIGN_NAME, parseMailStatus } from '@/lib/leads/mail-status';
 import { campaignContact, lead, leadContact } from '@/lib/leads/schema';
 import {
   campaignContactFieldsFromBody,
@@ -28,17 +25,15 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   try {
     if (!isUuid(contactId)) throw new Error('contactId ungültig');
     const body = (await req.json()) as Record<string, unknown>;
-    const fields = campaignContactFieldsFromBody(body);
+    const fields = campaignContactFieldsFromBody(body, parseMailStatus);
     const status = fields.status;
     if (!status) throw new Error('status erforderlich');
 
     const db = getLeadsDb();
-    const camp = await resolveCampaignId(db, id);
-    if (!camp) return NextResponse.json({ error: 'Kampagne nicht gefunden' }, { status: 404 });
-    if (camp.channel !== 'email' || camp.name !== EMAIL_CAMPAIGN_NAME) {
-      return NextResponse.json({ error: 'Kampagne ist keine Kanzlei-Mail-Kampagne' }, { status: 400 });
+    const camp = await resolveCampaignId(db, id, 'email');
+    if (!camp || camp.name !== EMAIL_CAMPAIGN_NAME) {
+      return NextResponse.json({ error: 'Kampagne nicht gefunden' }, { status: 404 });
     }
-    assertStatusMatchesChannel(status, camp.channel);
 
     const [person] = await db
       .select({ id: leadContact.id, leadId: leadContact.leadId })
@@ -119,6 +114,6 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       { status: 201 },
     );
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Fehler' }, { status: 400 });
+    return botCatchResponse(e, 'kanzlei-mail.campaigns.contact');
   }
 }

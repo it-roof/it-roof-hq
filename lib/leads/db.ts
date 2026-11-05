@@ -13,3 +13,7 @@ export function getLeadsDb(): LeadsDb {
   _db = drizzle(neon(url), { schema });
   return _db;
 }
+
+export function getLeadsSql() {
+  return getLeadsDb().$client;
+}

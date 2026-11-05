@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { requireKanzleiMailToken } from '@/lib/auth/require-kanzlei-mail-token';
+import { botCatchResponse } from '@/lib/leads/bot-error';
 import { getLeadsDb } from '@/lib/leads/db';
 import { emptyToNull, nowIso } from '@/lib/leads/http';
 import { domainTakenConflict, pickLeadMatch } from '@/lib/leads/kanzlei-mail';
@@ -128,6 +129,6 @@ export async function POST(req: NextRequest) {
       { status: 201 },
     );
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Fehler' }, { status: 400 });
+    return botCatchResponse(e, 'kanzlei-mail.leads');
   }
 }

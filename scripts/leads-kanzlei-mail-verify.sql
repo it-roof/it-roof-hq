@@ -31,15 +31,15 @@ SELECT
   ) AS status_check,
   (
     SELECT count(*)::int FROM pg_indexes
-    WHERE indexname = 'lead_contact_email_norm_key'
-  ) AS email_unique_index,
+    WHERE indexname = 'lead_contact_email_norm_idx'
+  ) AS email_norm_index,
   (
     SELECT count(*)::int
     FROM (
       SELECT 1
       FROM lead_contact
       WHERE email IS NOT NULL AND btrim(email) <> ''
-      GROUP BY lower(btrim(email))
+      GROUP BY lower(trim(email))
       HAVING count(*) > 1
     ) d
   ) AS duplicate_emails;

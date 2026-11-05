@@ -62,21 +62,8 @@ SET channel = 'email'
 WHERE name = 'E-Mail KI-Schulung Kanzleien'
   AND channel IS DISTINCT FROM 'email';
 
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM lead_contact
-    WHERE email IS NOT NULL AND btrim(email) <> ''
-    GROUP BY lower(btrim(email))
-    HAVING count(*) > 1
-  ) THEN
-    RAISE NOTICE 'lead_contact: doppelte E-Mails vorhanden — Unique-Index übersprungen';
-  ELSE
-    CREATE UNIQUE INDEX IF NOT EXISTS lead_contact_email_norm_key
-      ON lead_contact (lower(btrim(email)))
-      WHERE email IS NOT NULL AND btrim(email) <> '';
-  END IF;
-END $$;
+DROP INDEX IF EXISTS lead_contact_email_norm_key;
+CREATE INDEX IF NOT EXISTS lead_contact_email_norm_idx
+  ON lead_contact (lower(trim(email)));
 
 COMMIT;

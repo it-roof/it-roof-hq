@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import { requireKanzleiMailToken } from '@/lib/auth/require-kanzlei-mail-token';
+import { botCatchResponse } from '@/lib/leads/bot-error';
+import { fillContactEmailWithLock, insertContactWithEmailLock } from '@/lib/leads/contact-email-lock';
 import { getLeadsDb } from '@/lib/leads/db';
 import { emptyToNull, nowIso } from '@/lib/leads/http';
 import { normalizeEmail } from '@/lib/leads/email-check';
-import { contactEmailConflict, personNameFromBody } from '@/lib/leads/kanzlei-mail';
+import { contactEmailConflict, hasLeadLocator, personNameFromBody } from '@/lib/leads/kanzlei-mail';
 import { parseCompanyName } from '@/lib/leads/normalize';
 import { lead, leadContact } from '@/lib/leads/schema';
 import {
   contactFieldsFromBody,
+  fillContactNulls,
   findContactByEmail,
   findContactByNameOnLead,
   findLeadByCompanyName,
@@ -37,6 +40,13 @@ export async function POST(req: NextRequest) {
     const email = normalizeEmail(patch.email ?? emptyToNull(body.email));
 
     const explicitLeadId = emptyToNull(body.lead_id ?? body.leadId);
+    if (!hasLeadLocator(body)) {
+      return NextResponse.json(
+        { error: 'lead_id, domain oder company_name erforderlich' },
+        { status: 400 },
+      );
+    }
+
     if (explicitLeadId) {
       const [exists] = await db
         .select({ id: lead.id })
@@ -55,21 +65,14 @@ export async function POST(req: NextRequest) {
       : await findLeadByCompanyName(db, body.company_name ?? body.companyName);
     const leadId = explicitLeadId ?? byDomain?.id ?? byName?.id ?? null;
     if (!leadId) {
-      return NextResponse.json(
-        { error: 'lead_id, domain oder company_name erforderlich' },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: 'Lead nicht gefunden' }, { status: 404 });
     }
 
     const byEmail = email ? await findContactByEmail(db, email) : null;
     const emailConflict = contactEmailConflict(byEmail?.leadId, leadId);
     if (emailConflict) {
       return NextResponse.json(
-        {
-          error: emailConflict.error,
-          lead_id: byEmail?.leadId,
-          contact_id: byEmail?.id,
-        },
+        { error: emailConflict.error },
         { status: emailConflict.status },
       );
     }
@@ -84,21 +87,94 @@ export async function POST(req: NextRequest) {
     }
 
     if (existing) {
+      const updates = fillContactNulls(existing, { ...patch, email });
+      const nextEmail = updates.email ?? null;
+      delete updates.email;
+      if (Object.keys(updates).length > 0) {
+        await db
+          .update(leadContact)
+          .set({ ...updates, updatedAt: ts })
+          .where(eq(leadContact.id, existing.id));
+      }
+      if (nextEmail) {
+        const fill = await fillContactEmailWithLock(existing.id, nextEmail, ts);
+        if (fill === 'taken') {
+          return NextResponse.json(
+            { error: 'E-Mail gehört zu einem anderen Lead' },
+            { status: 409 },
+          );
+        }
+      }
       const [updated] = await db
-        .update(leadContact)
-        .set({
-          ...patch,
-          email: email ?? existing.email,
-          updatedAt: ts,
-        })
+        .select()
+        .from(leadContact)
         .where(eq(leadContact.id, existing.id))
-        .returning();
+        .limit(1);
       return NextResponse.json({
         ok: true,
         action: 'updated',
-        contact: publicContact(updated),
-        ids: { contact_id: updated.id, lead_id: updated.leadId },
+        contact: publicContact(updated ?? existing),
+        ids: { contact_id: existing.id, lead_id: existing.leadId },
       });
+    }
+
+    if (email) {
+      const created = await insertContactWithEmailLock({
+        leadId,
+        salutation: patch.salutation ?? emptyToNull(body.salutation),
+        firstName: first,
+        lastName: last,
+        position: patch.position ?? emptyToNull(body.position ?? body.rolle ?? body.role),
+        email,
+        phone: patch.phone ?? emptyToNull(body.phone),
+        createdAt: ts,
+        updatedAt: ts,
+      });
+      if (!created) {
+        const raced = await findContactByEmail(db, email);
+        const racedConflict = contactEmailConflict(raced?.leadId, leadId);
+        if (racedConflict) {
+          return NextResponse.json({ error: racedConflict.error }, { status: racedConflict.status });
+        }
+        if (raced) {
+          const updates = fillContactNulls(raced, { ...patch, email });
+          delete updates.email;
+          if (Object.keys(updates).length > 0) {
+            const [updated] = await db
+              .update(leadContact)
+              .set({ ...updates, updatedAt: ts })
+              .where(eq(leadContact.id, raced.id))
+              .returning();
+            return NextResponse.json({
+              ok: true,
+              action: 'updated',
+              contact: publicContact(updated ?? raced),
+              ids: { contact_id: raced.id, lead_id: raced.leadId },
+            });
+          }
+          return NextResponse.json({
+            ok: true,
+            action: 'updated',
+            contact: publicContact(raced),
+            ids: { contact_id: raced.id, lead_id: raced.leadId },
+          });
+        }
+        throw new Error('Kontakt konnte nicht angelegt werden');
+      }
+      const [row] = await db
+        .select()
+        .from(leadContact)
+        .where(eq(leadContact.id, created.id))
+        .limit(1);
+      return NextResponse.json(
+        {
+          ok: true,
+          action: 'created',
+          contact: publicContact(row!),
+          ids: { contact_id: created.id, lead_id: leadId },
+        },
+        { status: 201 },
+      );
     }
 
     const [created] = await db
@@ -126,6 +202,6 @@ export async function POST(req: NextRequest) {
       { status: 201 },
     );
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Fehler' }, { status: 400 });
+    return botCatchResponse(e, 'kanzlei-mail.contacts');
   }
 }
