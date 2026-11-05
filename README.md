@@ -115,6 +115,50 @@ node --import tsx scripts/generate-leads-scout-import-notion.mjs /pfad/zu/leads.
 
 Prüfung: `scripts/leads-scout-verify.sql`.
 
+## Kanzlei-Mail-API (E-Mail-Akquise)
+
+Zweiter interner Bot unter `/api/kanzlei-mail/*` (eigener Präfix neben `/api/scout/*` und neben der session-geschützten SMTP-Route `/api/mail/*`). Auth: `Authorization: Bearer <token>`. Hash in `KANZLEI_MAIL_API_TOKEN_SHA256`. Scout-Token gilt hier nicht, dieser Token nicht auf `/api/scout/*`. Kein Mailversand über diesen Token. Scout-Kampagnenrouten nur `channel=linkedin`/`li_*`, diese API nur `channel=email`/`mail_*` (fremde Kampagne 404).
+
+SQL (manuell, nach `leads-scout.sql`): `scripts/leads-kanzlei-mail.sql`. Prüfung: `scripts/leads-kanzlei-mail-verify.sql`.
+
+Kampagne **E-Mail KI-Schulung Kanzleien** (`channel = email`, Slug `email-ki-schulung-kanzleien`) speichert den Status pro Person in `campaign_contact` (`mail_*`). Bestehende E-Mail-Kampagnen bleiben auf `campaign_lead` / Abarbeiten.
+
+### Endpunkte
+
+| Methode | Pfad | Zweck |
+|---|---|---|
+| GET | `/api/kanzlei-mail/leads/lookup?domain=` oder `company_name=` | Kanzlei + Kontakte + `email_outreach_blocked` + Scout-/LinkedIn-Flags |
+| POST | `/api/kanzlei-mail/leads` | Upsert Kanzlei (Domain, sonst Firmen-Key; nur NULL-Felder; setzt `email_outreach_blocked` nicht) |
+| POST | `/api/kanzlei-mail/contacts` | Person am bestehenden Lead (nur NULL-Felder, E-Mail nie ersetzen; 409 wenn E-Mail an anderem Lead) |
+| GET | `/api/kanzlei-mail/campaigns/{id\|email-ki-schulung-kanzleien}/contacts?status=` | Kampagnenkontakte |
+| PUT | `/api/kanzlei-mail/campaigns/{id\|email-ki-schulung-kanzleien}/contacts/{contactId}` | Status/Entwurf; 409 wenn Lead gesperrt |
+
+### curl
+
+```bash
+export KANZLEI_MAIL_TOKEN='…'
+
+curl -sS "$HOST/api/kanzlei-mail/leads/lookup?company_name=Beispielkanzlei" \
+  -H "Authorization: Bearer $KANZLEI_MAIL_TOKEN"
+
+curl -sS -X POST "$HOST/api/kanzlei-mail/leads" \
+  -H "Authorization: Bearer $KANZLEI_MAIL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"company_name":"Beispielkanzlei","website":"https://www.beispiel.de","ort":"Bamberg","region":"oberfranken","source":"apify_google_maps"}'
+
+curl -sS -X POST "$HOST/api/kanzlei-mail/contacts" \
+  -H "Authorization: Bearer $KANZLEI_MAIL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"company_name":"Beispielkanzlei","name":"Ada Beispiel","rolle":"Partnerin","email":"ada@beispiel.de"}'
+
+curl -sS -X PUT "$HOST/api/kanzlei-mail/campaigns/email-ki-schulung-kanzleien/contacts/<CONTACT_ID>" \
+  -H "Authorization: Bearer $KANZLEI_MAIL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"mail_entwurf","draft_subject":"KI-Schulung","draft_body":"…","notes":"Entwurf"}'
+```
+
+Assertions: `node --import tsx scripts/assert-kanzlei-mail.mjs`
+
 ### Endpunkte
 
 | Methode | Pfad | Zweck |

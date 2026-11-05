@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireScoutToken } from '@/lib/auth/require-scout-token';
+import { botCatchResponse } from '@/lib/leads/bot-error';
 import { resolveCampaignId } from '@/lib/leads/campaign-channel';
 import { getLeadsDb } from '@/lib/leads/db';
 import { isLinkedInStatus, parseLinkedInStatus } from '@/lib/leads/linkedin-status';
@@ -16,14 +17,14 @@ export async function GET(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   try {
     const db = getLeadsDb();
-    const camp = await resolveCampaignId(db, id);
+    const camp = await resolveCampaignId(db, id, 'linkedin');
     if (!camp) return NextResponse.json({ error: 'Kampagne nicht gefunden' }, { status: 404 });
 
     const rawStatus = req.nextUrl.searchParams.get('status');
-    const status = rawStatus ? parseLinkedInStatus(rawStatus) : null;
     if (rawStatus && !isLinkedInStatus(rawStatus)) {
       throw new Error('status ungültig');
     }
+    const status = rawStatus ? parseLinkedInStatus(rawStatus) : null;
 
     const contacts = await listCampaignContacts(db, camp.id, status);
     return NextResponse.json({
@@ -32,6 +33,6 @@ export async function GET(req: NextRequest, { params }: Ctx) {
       meta: { returned: contacts.length },
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Fehler' }, { status: 400 });
+    return botCatchResponse(e, 'scout.campaigns.contacts');
   }
 }

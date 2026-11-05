@@ -9,13 +9,13 @@ import {
   parseCompanyName,
   parseOptionalDate,
 } from '@/lib/leads/normalize';
+import { normalizeEmail } from '@/lib/leads/email-check';
 import {
   LAW_FIRM_INDUSTRY,
   REGION_SEARCH,
-  parseLinkedInStatus,
   parseRegionKey,
-  type LinkedInStatus,
 } from '@/lib/leads/linkedin-status';
+import { parseCampaignContactStatus } from '@/lib/leads/campaign-channel';
 
 export type LeadsDb = ReturnType<typeof getLeadsDb>;
 
@@ -38,6 +38,8 @@ export function publicLead(row: typeof lead.$inferSelect) {
     specialties: row.specialties,
     source_url: row.sourceUrl,
     fit_reason: row.fitReason,
+    source: row.source,
+    notes: row.notes,
     email_outreach_blocked: row.emailOutreachBlocked,
   };
 }
@@ -138,6 +140,20 @@ export async function findContactByLinkedIn(db: LeadsDb, linkedin: unknown) {
   return row ?? null;
 }
 
+/** Gleicher Ausdruck wie Index lead_contact_email_norm_idx. */
+export const emailNormSql = sql`lower(trim(${leadContact.email}))`;
+
+export async function findContactByEmail(db: LeadsDb, email: unknown) {
+  const norm = normalizeEmail(typeof email === 'string' ? email : String(email ?? ''));
+  if (!norm) return null;
+  const [row] = await db
+    .select()
+    .from(leadContact)
+    .where(sql`${emailNormSql} = ${norm}`)
+    .limit(1);
+  return row ?? null;
+}
+
 export async function findContactByNameOnLead(
   db: LeadsDb,
   leadId: string,
@@ -220,21 +236,21 @@ export async function contactsWithCampaigns(db: LeadsDb, leadId: string) {
   }));
 }
 
-export function scoutLeadInsertValues(body: Record<string, unknown>) {
+export function leadFieldsFromBody(body: Record<string, unknown>) {
   const parsed = parseCompanyName(body.company_name ?? body.companyName);
   if (parsed.generic) {
     throw new Error('company_name ist zu generisch');
   }
   const companyName = parsed.displayName ?? normalizeCompanyName(body.company_name ?? body.companyName);
   if (!companyName) throw new Error('company_name erforderlich');
-  const domain = normalizeDomain(body.domain);
+  const domain = normalizeDomain(body.domain ?? body.website);
   const industry =
     emptyToNull(body.industry) ?? LAW_FIRM_INDUSTRY;
   return {
     companyName,
     domain,
     street: emptyToNull(body.street),
-    city: emptyToNull(body.city),
+    city: emptyToNull(body.city ?? body.ort),
     countryCode: emptyToNull(body.country_code ?? body.countryCode) ?? 'DE',
     phone: emptyToNull(body.phone),
     industry,
@@ -243,8 +259,13 @@ export function scoutLeadInsertValues(body: Record<string, unknown>) {
     specialties: emptyToNull(body.specialties),
     sourceUrl: emptyToNull(body.source_url ?? body.sourceUrl),
     fitReason: emptyToNull(body.fit_reason ?? body.fitReason),
-    emailOutreachBlocked: true,
+    source: emptyToNull(body.source),
+    notes: emptyToNull(body.notes),
   };
+}
+
+export function scoutLeadInsertValues(body: Record<string, unknown>) {
+  return { ...leadFieldsFromBody(body), emailOutreachBlocked: true };
 }
 
 export function fillLeadNulls(
@@ -273,10 +294,40 @@ export function fillLeadNulls(
   take('specialties', 'specialties', next.specialties);
   take('sourceUrl', 'sourceUrl', next.sourceUrl);
   take('fitReason', 'fitReason', next.fitReason);
+  take('source', 'source', next.source);
+  take('notes', 'notes', next.notes);
   take('searchQueryId', 'searchQueryId', next.searchQueryId);
   if (!current.domain && next.domain) {
     updates.domain = next.domain;
     if (current.status === 'error_no_domain') updates.status = 'raw';
+  }
+  return updates;
+}
+
+export function fillContactNulls(
+  current: typeof leadContact.$inferSelect,
+  next: Partial<typeof leadContact.$inferInsert>,
+) {
+  const updates: Partial<typeof leadContact.$inferInsert> = {};
+  const take = <K extends keyof typeof leadContact.$inferSelect>(
+    col: K,
+    insertKey: keyof typeof leadContact.$inferInsert,
+    value: unknown,
+  ) => {
+    if (value === undefined) return;
+    const cur = current[col];
+    if (cur == null || cur === '') {
+      (updates as Record<string, unknown>)[insertKey as string] = value;
+    }
+  };
+  take('salutation', 'salutation', next.salutation);
+  take('firstName', 'firstName', next.firstName);
+  take('lastName', 'lastName', next.lastName);
+  take('position', 'position', next.position);
+  take('phone', 'phone', next.phone);
+  take('linkedinUrl', 'linkedinUrl', next.linkedinUrl);
+  if ((current.email == null || current.email === '') && next.email) {
+    updates.email = next.email;
   }
   return updates;
 }
@@ -290,8 +341,10 @@ export function contactFieldsFromBody(body: Record<string, unknown>) {
   if (body.last_name !== undefined || body.lastName !== undefined) {
     updates.lastName = emptyToNull(body.last_name ?? body.lastName);
   }
-  if (body.position !== undefined) updates.position = emptyToNull(body.position);
-  if (body.email !== undefined) updates.email = emptyToNull(body.email);
+  if (body.position !== undefined || body.rolle !== undefined || body.role !== undefined) {
+    updates.position = emptyToNull(body.position ?? body.rolle ?? body.role);
+  }
+  if (body.email !== undefined) updates.email = normalizeEmail(emptyToNull(body.email));
   if (body.phone !== undefined) updates.phone = emptyToNull(body.phone);
   if (body.linkedin_url !== undefined || body.linkedin !== undefined || body.linkedinUrl !== undefined) {
     updates.linkedinUrl = normalizeLinkedInUrl(
@@ -301,9 +354,12 @@ export function contactFieldsFromBody(body: Record<string, unknown>) {
   return updates;
 }
 
-export function campaignContactFieldsFromBody(body: Record<string, unknown>) {
+export function campaignContactFieldsFromBody(
+  body: Record<string, unknown>,
+  parseStatus: (value: unknown) => string = parseCampaignContactStatus,
+) {
   const updates: Partial<typeof campaignContact.$inferInsert> = {};
-  if (body.status !== undefined) updates.status = parseLinkedInStatus(body.status);
+  if (body.status !== undefined) updates.status = parseStatus(body.status);
   if (body.notes !== undefined) updates.notes = emptyToNull(body.notes);
   if (body.next_step !== undefined || body.nextStep !== undefined) {
     updates.nextStep = emptyToNull(body.next_step ?? body.nextStep);
@@ -317,8 +373,11 @@ export function campaignContactFieldsFromBody(body: Record<string, unknown>) {
   if (body.write_from !== undefined || body.writeFrom !== undefined) {
     updates.writeFrom = parseOptionalDate(body.write_from ?? body.writeFrom, 'write_from');
   }
-  if (body.written_at !== undefined || body.writtenAt !== undefined) {
-    updates.writtenAt = parseOptionalDate(body.written_at ?? body.writtenAt, 'written_at');
+  if (body.written_at !== undefined || body.writtenAt !== undefined || body.date !== undefined) {
+    updates.writtenAt = parseOptionalDate(
+      body.written_at ?? body.writtenAt ?? body.date,
+      body.written_at !== undefined || body.writtenAt !== undefined ? 'written_at' : 'date',
+    );
   }
   if (body.replied_at !== undefined || body.repliedAt !== undefined) {
     updates.repliedAt = parseOptionalDate(body.replied_at ?? body.repliedAt, 'replied_at');
@@ -335,7 +394,7 @@ export function campaignContactFieldsFromBody(body: Record<string, unknown>) {
 export async function listCampaignContacts(
   db: LeadsDb,
   campaignId: string,
-  status?: LinkedInStatus | null,
+  status?: string | null,
 ) {
   const filters = [eq(campaignContact.campaignId, campaignId)];
   if (status) filters.push(eq(campaignContact.status, status));

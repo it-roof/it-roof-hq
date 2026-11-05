@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession, unauthorized } from '@/lib/auth/require-session';
 import { getLeadsDb } from '@/lib/leads/db';
-import { isLinkedInStatus } from '@/lib/leads/linkedin-status';
+import { isCampaignContactStatus } from '@/lib/leads/campaign-channel';
 import { listCampaignContacts } from '@/lib/leads/scout-queries';
 
 export async function GET(req: NextRequest) {
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'campaign_id erforderlich' }, { status: 400 });
   }
   const rawStatus = (req.nextUrl.searchParams.get('status') ?? '').trim();
-  if (rawStatus && !isLinkedInStatus(rawStatus)) {
+  if (rawStatus && !isCampaignContactStatus(rawStatus)) {
     return NextResponse.json({ error: 'status ungültig' }, { status: 400 });
   }
 
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   const contacts = await listCampaignContacts(
     db,
     campaignId,
-    rawStatus && isLinkedInStatus(rawStatus) ? rawStatus : null,
+    rawStatus && isCampaignContactStatus(rawStatus) ? rawStatus : null,
   );
   return NextResponse.json({
     contacts,

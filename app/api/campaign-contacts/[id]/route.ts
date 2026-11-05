@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { requireSession, unauthorized } from '@/lib/auth/require-session';
 import { getLeadsDb } from '@/lib/leads/db';
 import { campaignContact } from '@/lib/leads/schema';
+import { botCatchResponse } from '@/lib/leads/bot-error';
 import { nowIso } from '@/lib/leads/http';
 import { campaignContactFieldsFromBody, publicCampaignContact } from '@/lib/leads/scout-queries';
 
@@ -41,6 +42,6 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       campaign_contact: publicCampaignContact(updated),
     });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Fehler' }, { status: 400 });
+    return botCatchResponse(e, 'campaign-contacts.patch');
   }
 }

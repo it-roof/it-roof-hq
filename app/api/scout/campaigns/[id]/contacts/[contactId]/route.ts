@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { requireScoutToken } from '@/lib/auth/require-scout-token';
+import { botCatchResponse } from '@/lib/leads/bot-error';
 import { isUuid, resolveCampaignId } from '@/lib/leads/campaign-channel';
 import { getLeadsDb } from '@/lib/leads/db';
-import { campaignContact, leadContact } from '@/lib/leads/schema';
 import { nowIso } from '@/lib/leads/http';
+import { parseLinkedInStatus } from '@/lib/leads/linkedin-status';
+import { campaignContact, leadContact } from '@/lib/leads/schema';
 import {
   campaignContactFieldsFromBody,
   publicCampaignContact,
@@ -22,12 +24,12 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   try {
     if (!isUuid(contactId)) throw new Error('contactId ungültig');
     const body = (await req.json()) as Record<string, unknown>;
-    const fields = campaignContactFieldsFromBody(body);
+    const fields = campaignContactFieldsFromBody(body, parseLinkedInStatus);
     const status = fields.status;
     if (!status) throw new Error('status erforderlich');
 
     const db = getLeadsDb();
-    const camp = await resolveCampaignId(db, id);
+    const camp = await resolveCampaignId(db, id, 'linkedin');
     if (!camp) return NextResponse.json({ error: 'Kampagne nicht gefunden' }, { status: 404 });
 
     const [person] = await db
@@ -99,6 +101,6 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       { status: 201 },
     );
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : 'Fehler' }, { status: 400 });
+    return botCatchResponse(e, 'scout.campaigns.contact');
   }
 }

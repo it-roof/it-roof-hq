@@ -48,6 +48,7 @@ import {
 } from '@/lib/leads/campaign-steps';
 import { TemplateEditorFields } from '@/components/leads/template-field';
 import { LinkedInCampaignPanel } from '@/components/leads/linkedin-campaign-panel';
+import { usesCampaignLead } from '@/lib/leads/mail-status';
 import { cn } from '@/lib/utils';
 import {
   splitHeaderY,
@@ -398,8 +399,10 @@ export function CampaignsTab() {
                         )}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">
-                        {c.channel === 'linkedin' ? (
-                          <span className="text-[12px] text-muted-foreground">LinkedIn</span>
+                        {!usesCampaignLead(c) ? (
+                          <span className="text-[12px] text-muted-foreground">
+                            {c.channel === 'linkedin' ? 'LinkedIn' : 'E-Mail'}
+                          </span>
                         ) : list.length === 0 ? (
                           <span className="text-[12px] text-muted-foreground/70">—</span>
                         ) : (
@@ -421,7 +424,7 @@ export function CampaignsTab() {
                         )}
                       </TableCell>
                       <TableCell className="text-right font-mono text-[12px] tabular-nums text-muted-foreground">
-                        {c.channel === 'linkedin' ? (c.contact_count ?? 0) : list.length}
+                        {!usesCampaignLead(c) ? (c.contact_count ?? 0) : list.length}
                       </TableCell>
                       <TableCell className="hidden font-mono text-[12px] text-muted-foreground lg:table-cell">
                         {formatDate(c.created_at)}

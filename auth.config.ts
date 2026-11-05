@@ -1,5 +1,5 @@
 import type { NextAuthConfig } from 'next-auth';
-import { hasBearerToken, isScoutApiPath } from '@/lib/auth/scout-path';
+import { hasBearerToken, isKanzleiMailApiPath, isScoutApiPath } from '@/lib/auth/scout-path';
 
 function isPublicPath(pathname: string) {
   if (pathname.startsWith('/api/auth')) return true;
@@ -27,7 +27,7 @@ export default {
     authorized({ auth, request }) {
       if (isPublicPath(request.nextUrl.pathname)) return true;
       if (
-        isScoutApiPath(request.nextUrl.pathname)
+        (isScoutApiPath(request.nextUrl.pathname) || isKanzleiMailApiPath(request.nextUrl.pathname))
         && hasBearerToken(request.headers.get('authorization'))
       ) {
         return true;
