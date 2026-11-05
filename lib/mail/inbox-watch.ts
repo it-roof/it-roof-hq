@@ -27,7 +27,16 @@ export const PEEK_FETCH_QUERY = {
   uid: true,
   flags: true,
   envelope: true,
+  internalDate: true,
   source: true,
+} as const;
+
+export const HEADER_PEEK_QUERY = {
+  uid: true,
+  flags: true,
+  envelope: true,
+  internalDate: true,
+  headers: ['message-id', 'in-reply-to', 'references'],
 } as const;
 
 const DEFAULT_LIMIT = 20;
@@ -113,6 +122,8 @@ type Fetched = {
     to?: { name?: string; address?: string }[];
     cc?: { name?: string; address?: string }[];
   };
+  internalDate?: Date | string;
+  headers?: Buffer | string;
   source?: Buffer;
 };
 
@@ -168,6 +179,9 @@ export function parseCursor(raw: string | null | undefined): InboxWatchCursor | 
 
 export function htmlToPlainText(html: string): string {
   return html
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n\n')
     .replace(/<\/div>/gi, '\n')
@@ -184,20 +198,36 @@ export function htmlToPlainText(html: string): string {
     .trim();
 }
 
+function isOutlookQuoteStart(lines: string[], index: number): boolean {
+  const t = lines[index]!.trim();
+  const window = lines.slice(index, index + 8).join('\n');
+  if (/^von:\s+/i.test(t)) return /^gesendet:\s+/im.test(window);
+  if (/^from:\s+/i.test(t)) return /^sent:\s+/im.test(window);
+  return false;
+}
+
 export function clipQuotedHistory(text: string): string {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const out: string[] = [];
-  for (const line of lines) {
-    const t = line.trim();
+  for (let i = 0; i < lines.length; i += 1) {
+    const t = lines[i]!.trim();
+    const hasContent = out.some((l) => l.trim());
     if (t.startsWith('>')) break;
     if (/^on .+ wrote:$/i.test(t)) break;
     if (/^am .+ schrieb .+:?$/i.test(t)) break;
     if (/^-{2,}\s*original message/i.test(t)) break;
     if (/^-{2,}\s*ursprüngliche nachricht/i.test(t)) break;
-    if (out.some((l) => l.trim()) && /^_{8,}$/.test(t)) break;
-    out.push(line);
+    if (hasContent && /^_{8,}$/.test(t)) break;
+    if (hasContent && isOutlookQuoteStart(lines, i)) break;
+    out.push(lines[i]!);
   }
   return out.join('\n').trim();
+}
+
+export function replySubject(betreff: string): string {
+  const t = betreff.trim();
+  if (/^(re|aw)\s*:/i.test(t)) return t;
+  return t ? `Re: ${t}` : t;
 }
 
 export function inboxWatchText(plain: string | null | undefined, html: string | null | undefined): string {
@@ -267,6 +297,41 @@ function sortCandidates(a: Candidate, b: Candidate) {
   return a.konto.localeCompare(b.konto);
 }
 
+function toInternalDate(msg: Fetched): Date | null {
+  const raw = msg.internalDate;
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) return raw;
+  if (typeof raw === 'string' || typeof raw === 'number') {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
+function headerValue(raw: Buffer | string | undefined, name: string): string | null {
+  if (!raw) return null;
+  const text = Buffer.isBuffer(raw) ? raw.toString('utf8') : raw;
+  const unfolded = text.replace(/\r?\n[ \t]/g, ' ');
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const m = unfolded.match(new RegExp(`^${escaped}:\\s*(.+)$`, 'im'));
+  const value = m?.[1]?.trim();
+  return value || null;
+}
+
+function replyMetaFromFetched(msg: Fetched | undefined): { messageId: string; references: string; date: number } | null {
+  if (!msg) return null;
+  const messageId = formatMessageId(
+    headerValue(msg.headers, 'message-id') ?? msg.envelope?.messageId ?? null,
+  );
+  if (!messageId) return null;
+  const references = headerValue(msg.headers, 'references');
+  const refs = [references, messageId].filter(Boolean).join(' ').trim();
+  return {
+    messageId,
+    references: refs || messageId,
+    date: toInternalDate(msg)?.getTime() ?? 0,
+  };
+}
+
 async function collectUids(client: InboxWatchClient, since: Date): Promise<number[]> {
   const searched = await client.search({ since }, { uid: true });
   return (Array.isArray(searched) ? searched : [])
@@ -300,14 +365,14 @@ async function listCandidates(
         uid: true,
         flags: true,
         envelope: true,
+        internalDate: true,
       });
       const rows: Candidate[] = [];
       for (const msg of fetched) {
         const uid = Number(msg.uid);
         if (!Number.isFinite(uid)) continue;
-        const dateRaw = msg.envelope?.date;
-        const date = dateRaw instanceof Date ? dateRaw : dateRaw ? new Date(dateRaw) : null;
-        if (!date || Number.isNaN(date.getTime()) || date < since) continue;
+        const date = toInternalDate(msg);
+        if (!date || date < since) continue;
         rows.push({
           konto,
           uid,
@@ -461,80 +526,63 @@ function parseReplyUid(inReplyTo: string | null | undefined, konto: InboxWatchKo
   return null;
 }
 
-async function searchMessageId(client: InboxWatchClient, rawId: string): Promise<number | null> {
+async function searchHeaderUids(client: InboxWatchClient, field: string, rawId: string): Promise<number[]> {
   const formatted = formatMessageId(rawId);
   const normalized = normalizeMessageId(rawId);
   const values = [formatted, normalized, rawId.trim()].filter((v, i, all): v is string => Boolean(v) && all.indexOf(v) === i);
+  const uids = new Set<number>();
   for (const value of values) {
-    const found = await client.search({ header: { 'message-id': value } }, { uid: true });
-    const uid = (Array.isArray(found) ? found : []).map(Number).find((n) => Number.isFinite(n));
-    if (uid != null) return uid;
+    const found = await client.search({ header: { [field]: value } }, { uid: true });
+    for (const u of Array.isArray(found) ? found : []) {
+      const n = Number(u);
+      if (Number.isFinite(n)) uids.add(n);
+    }
   }
-  return null;
+  return [...uids];
 }
 
 async function loadReplyTarget(
   client: InboxWatchClient,
   opts: { konto: InboxWatchKonto; threadId?: string | null; inReplyTo?: string | null },
 ): Promise<{ messageId: string; references: string } | null> {
-  const listed = await client.list();
-  const folders = ['INBOX', findSentPath(listed)].filter((p): p is string => Boolean(p));
   const wantUid = parseReplyUid(opts.inReplyTo, opts.konto);
   const wantMessageId = wantUid == null ? formatMessageId(opts.inReplyTo) ?? opts.inReplyTo?.trim() ?? null : null;
   const wantThread = normalizeMessageId(opts.threadId) ?? opts.threadId?.trim() ?? null;
 
-  const threadHits: { date: number; messageId: string; references: string }[] = [];
+  if (wantUid != null) {
+    await client.mailboxOpen('INBOX', INBOX_OPEN_OPTIONS);
+    const fetched = await fetchPeek(client, [wantUid], HEADER_PEEK_QUERY);
+    const meta = replyMetaFromFetched(fetched.find((m) => Number(m.uid) === wantUid));
+    return meta ? { messageId: meta.messageId, references: meta.references } : null;
+  }
+
+  const listed = await client.list();
+  const folders = ['INBOX', findSentPath(listed)].filter((p): p is string => Boolean(p));
+  const hits: { messageId: string; references: string; date: number }[] = [];
 
   for (const folder of folders) {
     await client.mailboxOpen(folder, INBOX_OPEN_OPTIONS);
-    let uids: number[] = [];
-    if (wantUid != null) {
-      uids = [wantUid];
-    } else if (wantMessageId) {
-      const uid = await searchMessageId(client, wantMessageId);
-      if (uid != null) uids = [uid];
+    const uids = new Set<number>();
+    if (wantMessageId) {
+      for (const uid of await searchHeaderUids(client, 'message-id', wantMessageId)) uids.add(uid);
     }
-    if (!uids.length) {
-      uids = await collectUids(client, new Date(Date.now() - 180 * 24 * 60 * 60 * 1000));
+    if (wantThread) {
+      for (const uid of await searchHeaderUids(client, 'message-id', wantThread)) uids.add(uid);
+      for (const uid of await searchHeaderUids(client, 'references', wantThread)) uids.add(uid);
     }
-    const fetched = await fetchPeek(client, uids, PEEK_FETCH_QUERY);
+    if (!uids.size) continue;
+    const fetched = await fetchPeek(client, [...uids], HEADER_PEEK_QUERY);
     for (const msg of fetched) {
-      if (!msg.source) continue;
-      let messageId = formatMessageId(msg.envelope?.messageId ?? null);
-      let inReplyTo = formatMessageId(msg.envelope?.inReplyTo ?? null);
-      let references: string | null = null;
-      try {
-        const parsed = await simpleParser(msg.source);
-        messageId = formatMessageId(parsed.messageId ?? msg.envelope?.messageId ?? null) ?? messageId;
-        inReplyTo = formatMessageId(parsed.inReplyTo) ?? parsed.inReplyTo ?? inReplyTo;
-        references = Array.isArray(parsed.references)
-          ? parsed.references.join(' ')
-          : (parsed.references ?? null);
-      } catch {
-        // Envelope reicht
+      const meta = replyMetaFromFetched(msg);
+      if (!meta) continue;
+      if (wantMessageId && normalizeMessageId(meta.messageId) === normalizeMessageId(wantMessageId)) {
+        return { messageId: meta.messageId, references: meta.references };
       }
-      if (!messageId) continue;
-      const threadId = threadIdFromHeaders(messageId, inReplyTo, references);
-      const uid = Number(msg.uid);
-      const matchesUid = wantUid != null && uid === wantUid;
-      const matchesId = Boolean(
-        wantMessageId && normalizeMessageId(messageId) === normalizeMessageId(wantMessageId),
-      );
-      const matchesThread = Boolean(
-        wantThread && (threadId === wantThread || normalizeMessageId(messageId) === wantThread),
-      );
-      if (!matchesUid && !matchesId && !matchesThread) continue;
-      const refs = [references, messageId].filter(Boolean).join(' ').trim();
-      if (matchesUid || matchesId) {
-        return { messageId, references: refs };
-      }
-      const dateRaw = msg.envelope?.date;
-      const date = dateRaw instanceof Date ? dateRaw.getTime() : dateRaw ? new Date(dateRaw).getTime() : 0;
-      threadHits.push({ date, messageId, references: refs });
+      hits.push(meta);
     }
   }
-  threadHits.sort((a, b) => b.date - a.date);
-  const best = threadHits[0];
+  hits.sort((a, b) => b.date - a.date);
+  const best = hits[0];
   return best ? { messageId: best.messageId, references: best.references } : null;
 }
 
@@ -587,7 +635,7 @@ export async function appendInboxWatchDraft(
       const raw: Buffer = await new MailComposer({
         from: creds.displayName ? { name: creds.displayName, address: creds.email } : creds.email,
         to: to.map((a) => (a.name ? { name: a.name, address: a.address } : a.address)),
-        subject: opts.betreff,
+        subject: replySubject(opts.betreff),
         text: opts.text,
         inReplyTo,
         references: references ?? undefined,
