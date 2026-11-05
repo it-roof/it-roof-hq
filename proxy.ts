@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 import authConfig from '@/auth.config';
-import { hasBearerToken, isScoutApiPath } from '@/lib/auth/scout-path';
+import { hasBearerToken, isKanzleiMailApiPath, isScoutApiPath } from '@/lib/auth/scout-path';
 
 const { auth } = NextAuth(authConfig);
 
@@ -37,7 +37,7 @@ export const proxy = auth((request) => {
     return nextWithNoIndex();
   }
 
-  if (isScoutApiPath(pathname)) {
+  if (isScoutApiPath(pathname) || isKanzleiMailApiPath(pathname)) {
     if (hasBearerToken(request.headers.get('authorization'))) {
       return nextWithNoIndex();
     }

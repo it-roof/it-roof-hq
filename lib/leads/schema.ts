@@ -20,6 +20,8 @@ export const lead = pgTable('lead', {
   specialties: text(),
   sourceUrl: text('source_url'),
   fitReason: text('fit_reason'),
+  source: text(),
+  notes: text(),
   emailOutreachBlocked: boolean('email_outreach_blocked').notNull().default(false),
 });
 

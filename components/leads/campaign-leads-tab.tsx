@@ -30,6 +30,7 @@ import {
 import { ListPagination } from '@/components/leads/list-pagination';
 import { PageHeader } from '@/components/page-header';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usesCampaignLead } from '@/lib/leads/mail-status';
 import { campaignFlowLabel } from '@/lib/leads/campaign-steps';
 import { appendListParams } from '@/lib/leads/filter-params';
 import { PAGE_SIZE, type PageSize } from '@/lib/leads/pagination';
@@ -233,7 +234,7 @@ export function CampaignLeadsTab() {
         }
         setCampaigns(
           (campsData.campaigns ?? [])
-            .filter((c: { channel?: string }) => c.channel !== 'linkedin')
+            .filter((c: { channel?: string; name?: string }) => usesCampaignLead(c))
             .map((c: {
             id: string;
             name: string;
