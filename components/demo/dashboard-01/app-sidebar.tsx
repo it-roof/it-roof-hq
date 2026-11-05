@@ -9,17 +9,20 @@ import {
   IconMovie,
   IconCrosshair,
   IconFolder,
-  IconInnerShadowTop,
+  IconCpu,
   IconLayoutDashboard,
+  IconBook,
   IconMail,
   IconSpeakerphone,
   IconReport,
   IconSettings,
+  IconShieldLock,
   IconSparkles,
   IconUsers,
 } from "@tabler/icons-react"
 
 import { NavDocuments } from "@/components/demo/dashboard-01/nav-documents"
+import { NavMail } from "@/components/demo/dashboard-01/nav-mail"
 import { NavMain } from "@/components/demo/dashboard-01/nav-main"
 import { NavSecondary } from "@/components/demo/dashboard-01/nav-secondary"
 import { NavUser } from "@/components/demo/dashboard-01/nav-user"
@@ -35,11 +38,6 @@ import {
 import { getAreaForPath } from "@/lib/nav"
 
 const data = {
-  user: {
-    name: "IT ROOF",
-    email: "team@it-roof.de",
-    avatar: "/avatars/shadcn.jpg",
-  },
   navMain: [
     {
       title: "Heute",
@@ -107,12 +105,27 @@ const data = {
       url: "/mail/konten",
       icon: IconSettings,
     },
+    {
+      name: "Grokbot API",
+      url: "/einstellungen/bot-api",
+      icon: IconBook,
+    },
+    {
+      name: "Sicherheit",
+      url: "/einstellungen/sicherheit",
+      icon: IconShieldLock,
+    },
   ],
   navSecondary: [
     {
       title: "E-Mail",
       url: "/mail",
       icon: IconMail,
+    },
+    {
+      title: "Grokbot API",
+      url: "/einstellungen/bot-api",
+      icon: IconBook,
     },
     {
       title: "Demo",
@@ -122,7 +135,7 @@ const data = {
     {
       title: "Sicherheit",
       url: "/einstellungen/sicherheit",
-      icon: IconSettings,
+      icon: IconShieldLock,
     },
   ],
 }
@@ -141,7 +154,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
               <Link href="/">
-                <IconInnerShadowTop className="size-5!" />
+                <IconCpu className="size-5!" />
                 <span className="text-base font-semibold">IT ROOF</span>
               </Link>
             </SidebarMenuButton>
@@ -156,13 +169,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {area.id === "crm-akquise" && (
           <NavDocuments label="CRM Leads" items={data.akquise} />
         )}
-        {area.id === "kanaele" && (
-          <NavDocuments label="Inbox" items={data.kanaele} />
-        )}
+        {area.id === "kanaele" &&
+          (pathname === "/mail" || pathname.startsWith("/mail/") ? (
+            pathname.startsWith("/mail/konten") ? (
+              <NavDocuments label="Inbox" items={data.kanaele} />
+            ) : (
+              <NavMail />
+            )
+          ) : (
+            <NavDocuments label="Inbox" items={data.kanaele} />
+          ))}
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser />
       </SidebarFooter>
     </Sidebar>
   )

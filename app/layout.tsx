@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { TimerProvider } from "@/lib/timer-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppShell } from "@/components/app-shell";
+import { ShellUserProvider } from "@/components/shell-user";
 
 const geistSans = Geist({
   subsets: ["latin"],
@@ -54,9 +55,11 @@ export default async function RootLayout({
       <body className={`${geistSans.className} min-h-full flex flex-col bg-background`}>
         <ThemeProvider>
           <TimerProvider>
-            <AppShell user={user}>
-              {children}
-            </AppShell>
+            <ShellUserProvider user={user}>
+              <AppShell user={user}>
+                {children}
+              </AppShell>
+            </ShellUserProvider>
           </TimerProvider>
         </ThemeProvider>
       </body>

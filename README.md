@@ -46,61 +46,10 @@ Der Compose-Dialog unterstützt:
 - **Multipart/Alternative**: Automatische Generierung einer Plain-Text-Fallback-Version
 - **Signatur**: Wird automatisch angehängt (bei HTML als `<div>`, bei Plain-Text am Ende)
 
-### Programmatische Mail-API
+### Mail-Bot JSON-API (Grok)
 
-Für Automationen und Outreach-Kampagnen steht eine REST-API zur Verfügung:
-
-**Endpoint:** `POST /api/mail/send-html`
-
-**Authentifizierung:** Session-Cookie (gleiche Auth wie normale App)
-
-**Request Body:**
-```json
-{
-  "account_email": "jakob@it-roof.de",
-  "to": "kunde@beispiel.de",
-  "cc": ["kollege@it-roof.de"],
-  "subject": "Betreff der Mail",
-  "html": "<p>Hallo,</p><p>Dies ist der <strong>HTML-Body</strong>.</p>"
-}
-```
-
-**Response (Erfolg):**
-```json
-{
-  "ok": true,
-  "message_id": "<...@it-roof.de>",
-  "sent_from": "jakob@it-roof.de",
-  "sent_to": ["kunde@beispiel.de"],
-  "sent_cc": ["kollege@it-roof.de"]
-}
-```
-
-**Response (Fehler):**
-```json
-{
-  "error": "Fehlermeldung"
-}
-```
-
-**Hinweise:**
-- Die Signatur des Kontos wird **automatisch** angehängt
-- Eine Plain-Text-Fallback-Version wird automatisch generiert
-- Bilder können via Remote-URL (`<img src="https://...">`) eingebunden werden
-- `to` und `cc` können String oder Array sein
-
-**Beispiel (curl):**
-```bash
-curl -X POST https://hq.it-roof.com/api/mail/send-html \
-  -H "Content-Type: application/json" \
-  -H "Cookie: authjs.session-token=..." \
-  -d '{
-    "account_email": "jakob@it-roof.de",
-    "to": "kunde@beispiel.de",
-    "subject": "Sales Outreach",
-    "html": "<p>Hallo,</p><p>Wir haben ein Angebot für Sie...</p>"
-  }'
-```
+Für den internen Grok-Mail-Agenten: Bearer-Token-API unter `/api/bot/mail/*`  
+(Plaintext-Bodies, Audit-Log, Senden default aus). Details: [docs/bot-mail-api.md](docs/bot-mail-api.md).
 
 ## Learn More
 

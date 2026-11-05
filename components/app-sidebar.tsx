@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getAreaForPath, isLinkActive } from '@/lib/nav';
 import { logoutAction } from '@/app/actions/auth';
-import type { ShellUser } from '@/components/app-shell';
+import type { ShellUser } from '@/components/shell-user';
 import {
   Sidebar,
   SidebarContent,

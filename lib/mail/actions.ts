@@ -134,6 +134,107 @@ export async function deleteMessage(opts: { messageId: string; userId: string })
   return { ok: true as const, permanent: false };
 }
 
+/**
+ * Nachricht in einen anderen Ordner desselben Postfachs verschieben (IMAP + lokal).
+ */
+export async function moveMessage(opts: {
+  messageId: string;
+  userId: string;
+  targetFolderId: string;
+}) {
+  const msg = await loadOwnedMessage(opts.messageId, opts.userId);
+  if (!msg) return null;
+
+  const [target] = await db
+    .select()
+    .from(mailboxFolder)
+    .where(eq(mailboxFolder.id, opts.targetFolderId))
+    .limit(1);
+  if (!target || target.mailboxId !== msg.mailboxId) {
+    throw new Error('Zielordner ungültig oder anderes Postfach');
+  }
+  if (target.id === msg.folderId) {
+    return { ok: true as const, folder_id: target.id, unchanged: true };
+  }
+
+  const creds = await getMailboxCredentials(msg.mailboxId, opts.userId);
+  if (!creds) return null;
+
+  let newUid: number | null = null;
+  if (msg.uid != null) {
+    await withImap(creds, async (client) => {
+      const lock = await client.getMailboxLock(msg.imapPath);
+      try {
+        const moved = await client.messageMove(msg.uid!, target.imapPath, { uid: true });
+        if (!moved) throw new Error('IMAP MOVE fehlgeschlagen');
+        newUid = uidFromMap(moved.uidMap, msg.uid!);
+      } finally {
+        lock.release();
+      }
+    });
+  }
+
+  await db
+    .update(mailboxMessage)
+    .set({ uid: null, updatedAt: new Date() })
+    .where(eq(mailboxMessage.id, msg.id));
+
+  try {
+    await db
+      .update(mailboxMessage)
+      .set({
+        folderId: target.id,
+        uid: newUid,
+        updatedAt: new Date(),
+      })
+      .where(eq(mailboxMessage.id, msg.id));
+  } catch {
+    await db
+      .update(mailboxMessage)
+      .set({
+        folderId: target.id,
+        uid: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(mailboxMessage.id, msg.id));
+  }
+
+  return {
+    ok: true as const,
+    folder_id: target.id,
+    folder_role: target.role,
+    unchanged: false,
+  };
+}
+
+/** Convenience: in Ordner mit Role archivieren (archive) oder Papierkorb. */
+export async function moveMessageByRole(opts: {
+  messageId: string;
+  userId: string;
+  role: 'archive' | 'trash' | 'inbox' | 'junk';
+}) {
+  const msg = await loadOwnedMessage(opts.messageId, opts.userId);
+  if (!msg) return null;
+
+  if (opts.role === 'trash') {
+    return deleteMessage({ messageId: opts.messageId, userId: opts.userId });
+  }
+
+  const folders = await db
+    .select()
+    .from(mailboxFolder)
+    .where(eq(mailboxFolder.mailboxId, msg.mailboxId));
+  const target = folders.find((f) => f.role === opts.role);
+  if (!target) {
+    throw new Error(`Kein Ordner mit Rolle „${opts.role}“ gefunden — zuerst Sync`);
+  }
+  return moveMessage({
+    messageId: opts.messageId,
+    userId: opts.userId,
+    targetFolderId: target.id,
+  });
+}
+
 function uidFromMap(uidMap: Map<number, number> | undefined, sourceUid: number): number | null {
   if (!uidMap || uidMap.size === 0) return null;
   const direct = uidMap.get(sourceUid);

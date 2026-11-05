@@ -19,6 +19,8 @@ import {
   TargetIcon,
   LayoutPanelLeftIcon,
   RadioIcon,
+  BookOpenIcon,
+  ShieldIcon,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -110,6 +112,8 @@ export const OS_AREAS: OsArea[] = [
     links: [
       { href: '/mail', label: 'E-Mail', icon: MailIcon },
       { href: '/mail/konten', label: 'Konten', icon: Settings2Icon },
+      { href: '/einstellungen/bot-api', label: 'Grokbot API', icon: BookOpenIcon },
+      { href: '/einstellungen/sicherheit', label: 'Sicherheit', icon: ShieldIcon },
     ],
   },
 ];

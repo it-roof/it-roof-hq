@@ -18,6 +18,8 @@ function nextWithNoIndex() {
 
 function isPublicPath(pathname: string) {
   if (pathname.startsWith('/api/auth')) return true;
+  // Bot-API authentifiziert selbst via Bearer (MAIL_BOT_TOKEN)
+  if (pathname.startsWith('/api/bot/')) return true;
   if (pathname === '/login') return true;
   if (pathname === '/login/reset' || pathname.startsWith('/login/reset/')) return true;
   if (pathname === '/demo' || pathname.startsWith('/demo/')) return true;
@@ -33,7 +35,7 @@ export const proxy = auth((request) => {
   const { pathname } = request.nextUrl;
   const isLoggedIn = !!request.auth;
 
-  if (pathname.startsWith('/api/auth')) {
+  if (pathname.startsWith('/api/auth') || pathname.startsWith('/api/bot/')) {
     return nextWithNoIndex();
   }
 

@@ -4,9 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
 import {
-  ArchiveIcon,
-  FileTextIcon,
-  InboxIcon,
   MailIcon,
   PaperclipIcon,
   PenLineIcon,
@@ -14,7 +11,6 @@ import {
   ReplyAllIcon,
   ReplyIcon,
   SearchIcon,
-  SendIcon,
   Settings2Icon,
   StarIcon,
   Trash2Icon,
@@ -26,6 +22,11 @@ import { cn } from '@/lib/utils';
 import type { MailboxPublic, MailFolder, MailMessageDetail, MailMessageListItem } from '@/lib/mail/types';
 import { MailAccountDialog } from '@/components/mail/mail-account-dialog';
 import { MailCompose } from '@/components/mail/mail-compose';
+import {
+  useMailNav,
+  type MailNavFolder,
+  type MailNavMailbox,
+} from '@/components/mail/mail-nav-context';
 
 const ROLE_DE: Record<string, string> = {
   inbox: 'Posteingang',
@@ -37,15 +38,6 @@ const ROLE_DE: Record<string, string> = {
   other: 'Ordner',
 };
 
-const ROLE_ICON: Record<string, typeof InboxIcon> = {
-  inbox: InboxIcon,
-  drafts: FileTextIcon,
-  sent: SendIcon,
-  archive: ArchiveIcon,
-  junk: MailIcon,
-  trash: Trash2Icon,
-};
-
 const SYSTEM_ROLES = ['inbox', 'drafts', 'sent', 'archive', 'junk', 'trash'] as const;
 
 type ComposeState = {
@@ -54,6 +46,7 @@ type ComposeState = {
 };
 
 export function MailApp() {
+  const mailNav = useMailNav();
   const [boxes, setBoxes] = useState<MailboxPublic[]>([]);
   const [folders, setFolders] = useState<MailFolder[]>([]);
   const [messages, setMessages] = useState<MailMessageListItem[]>([]);
@@ -180,32 +173,110 @@ export function MailApp() {
     setDetail(d => d && d.id === id ? { ...d, flagged } : d);
   }
 
-  const groupedFolders = useMemo(() => {
-    const source = mailboxId === 'all' ? folders : folders.filter(f => f.mailbox_id === mailboxId);
-    const byRole = new Map<string, MailFolder>();
-    const others: MailFolder[] = [];
-    for (const f of source) {
-      if ((SYSTEM_ROLES as readonly string[]).includes(f.role)) {
-        const cur = byRole.get(f.role);
-        if (!cur) {
-          byRole.set(f.role, {
-            ...f,
-            id: `role:${f.role}`,
-            name: ROLE_DE[f.role] ?? f.name,
-            unread: f.unread,
-          });
+  const navMailboxes = useMemo((): MailNavMailbox[] => {
+    return boxes.map((box) => {
+      const source = folders.filter((f) => f.mailbox_id === box.id);
+      const byRole = new Map<string, MailNavFolder>();
+      const others: MailNavFolder[] = [];
+      for (const f of source) {
+        if ((SYSTEM_ROLES as readonly string[]).includes(f.role)) {
+          const cur = byRole.get(f.role);
+          if (!cur) {
+            byRole.set(f.role, {
+              id: `role:${f.role}`,
+              name: ROLE_DE[f.role] ?? f.name,
+              role: f.role,
+              unread: f.unread,
+              kind: 'role',
+            });
+          } else {
+            cur.unread += f.unread;
+          }
         } else {
-          cur.unread += f.unread;
+          others.push({
+            id: f.id,
+            name: f.name,
+            role: f.role,
+            unread: f.unread,
+            kind: 'folder',
+          });
         }
-      } else {
-        others.push(f);
       }
-    }
-    return [
-      ...SYSTEM_ROLES.map(r => byRole.get(r)).filter((f): f is MailFolder => Boolean(f)),
-      ...others.sort((a, b) => a.name.localeCompare(b.name, 'de')),
-    ];
-  }, [folders, mailboxId]);
+      const boxFolders = [
+        ...SYSTEM_ROLES.map((r) => byRole.get(r)).filter(
+          (f): f is MailNavFolder => Boolean(f),
+        ),
+        ...others.sort((a, b) => a.name.localeCompare(b.name, 'de')),
+      ];
+      return {
+        id: box.id,
+        label: box.display_name || box.email,
+        email: box.email,
+        unread: boxFolders.reduce((sum, f) => sum + f.unread, 0),
+        folders: boxFolders,
+      };
+    });
+  }, [boxes, folders]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedId(null);
+    setDetail(null);
+    setThread([]);
+  }, []);
+
+  const onSelectMailbox = useCallback(
+    (id: string) => {
+      setMailboxId(id);
+      setFolderId(null);
+      setRole('inbox');
+      clearSelection();
+    },
+    [clearSelection],
+  );
+
+  const onSelectFolder = useCallback(
+    (id: string, folder: MailNavFolder) => {
+      setMailboxId(id);
+      if (folder.kind === 'role') {
+        setFolderId(null);
+        setRole(folder.role);
+      } else {
+        setFolderId(folder.id);
+        setRole(folder.role);
+      }
+      clearSelection();
+    },
+    [clearSelection],
+  );
+
+  const setMailNav = mailNav?.setMailNav;
+
+  useEffect(() => {
+    if (!setMailNav) return;
+    const activeMailboxId = mailboxId === 'all' ? null : mailboxId;
+    const activeFolderId = activeMailboxId
+      ? folderId ?? (role ? `role:${role}` : null)
+      : null;
+    setMailNav({
+      mailboxes: navMailboxes,
+      activeMailboxId,
+      activeFolderId,
+      onSelectMailbox,
+      onSelectFolder,
+    });
+  }, [
+    setMailNav,
+    navMailboxes,
+    mailboxId,
+    folderId,
+    role,
+    onSelectMailbox,
+    onSelectFolder,
+  ]);
+
+  useEffect(() => {
+    return () => setMailNav?.(null);
+  }, [setMailNav]);
 
   if (!loading && boxes.length === 0) {
     return (
@@ -268,46 +339,7 @@ export function MailApp() {
       </div>
 
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 flex-1">
-        <ResizablePanel defaultSize="18%" minSize="12%" className="hidden min-h-0 md:block">
-          <nav className="h-full overflow-y-auto py-2">
-            {groupedFolders.map(f => {
-              const Icon = ROLE_ICON[f.role] ?? MailIcon;
-              const key = f.id.startsWith('role:') ? f.id : f.id;
-              const active = f.id.startsWith('role:')
-                ? !folderId && role === f.role
-                : folderId === f.id;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    if (f.id.startsWith('role:')) {
-                      setFolderId(null);
-                      setRole(f.role);
-                    } else {
-                      setFolderId(f.id);
-                      setRole(f.role);
-                    }
-                    setSelectedId(null);
-                    setDetail(null);
-                  }}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm',
-                    active ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  )}
-                >
-                  <Icon className="size-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                  {f.unread > 0 && (
-                    <span className="font-mono text-[11px] tabular-nums">{f.unread}</span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </ResizablePanel>
-        <ResizableHandle className="hidden md:flex" />
-        <ResizablePanel defaultSize="32%" minSize="20%" className={cn('min-h-0', detail && 'hidden md:block')}>
+        <ResizablePanel defaultSize="38%" minSize="24%" className={cn('min-h-0', detail && 'hidden md:block')}>
           <div className="h-full overflow-y-auto">
             {loading ? (
               <p className="px-4 py-6 text-sm text-muted-foreground">Laden…</p>
