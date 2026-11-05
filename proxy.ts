@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import { NextResponse } from 'next/server';
 import authConfig from '@/auth.config';
+import { hasBearerToken, isInboxWatchApiPath } from '@/lib/auth/inbox-watch-path';
 
 const { auth } = NextAuth(authConfig);
 
@@ -34,6 +35,15 @@ export const proxy = auth((request) => {
 
   if (pathname.startsWith('/api/auth')) {
     return nextWithNoIndex();
+  }
+
+  if (isInboxWatchApiPath(pathname)) {
+    if (hasBearerToken(request.headers.get('authorization'))) {
+      return nextWithNoIndex();
+    }
+    return withNoIndex(
+      NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    );
   }
 
   // Alte/öffentliche Reset-Request-URLs nicht exposen

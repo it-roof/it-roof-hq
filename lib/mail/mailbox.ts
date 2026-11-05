@@ -49,6 +49,17 @@ export async function getMailboxCredentials(id: string, userId?: string): Promis
     .where(userId ? and(eq(mailbox.id, id), eq(mailbox.userId, userId)) : eq(mailbox.id, id))
     .limit(1);
   if (!row) return null;
+  return withDecryptedPassword(row);
+}
+
+export async function getMailboxCredentialsByEmail(email: string): Promise<MailboxCredentials | null> {
+  const rows = await db.select().from(mailbox).where(eq(mailbox.email, email.trim().toLowerCase()));
+  const row = rows.sort((a, b) => (b.lastSyncAt?.getTime() ?? 0) - (a.lastSyncAt?.getTime() ?? 0))[0];
+  if (!row) return null;
+  return withDecryptedPassword(row);
+}
+
+function withDecryptedPassword(row: MailboxRow): MailboxCredentials {
   try {
     return { ...row, password: decryptSecret(row.passwordEncrypted) };
   } catch (err) {
