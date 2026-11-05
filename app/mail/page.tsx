@@ -10,6 +10,3 @@ export default function MailPage() {
     </DashboardShell>
   );
 }
-
-
-
